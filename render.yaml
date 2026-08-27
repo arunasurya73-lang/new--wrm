@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: airsense-backend
+    env: python
+    pythonVersion: "3.11.9"
+    rootDir: backend
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: python3 -m uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: OPENWEATHER_API_KEY
+        value: 90ef0119c636b88eb06b683a3c4db4e4
+      - key: NASA_FIRMS_KEY
+        value: a2020689b302eb8a31ef4837aa15410e
+      - key: USE_MOCK_DATA
+        value: false
+      - key: DATABASE_URL
+        value: sqlite:///./airsense.db
