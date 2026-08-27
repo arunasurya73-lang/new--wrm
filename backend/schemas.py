@@ -89,5 +89,5 @@ class FeedbackResponse(BaseModel):
     submitted_at: str
 
     class Config:
-        from_attributes = True
+        orm_mode = True
 
