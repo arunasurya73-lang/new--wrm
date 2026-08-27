@@ -2,8 +2,6 @@ import os
 import datetime
 import requests
 from dotenv import load_dotenv
-from sqlalchemy.orm import Session
-import models
 from services.aqi_service import get_current_aqi
 from services.forecast_service import get_best_time_outside
 
@@ -13,16 +11,9 @@ USE_MOCK_DATA = os.getenv("USE_MOCK_DATA", "true").lower() == "true"
 
 def format_time_range(start_iso: str, end_iso: str) -> str:
     try:
-        # DB stores UTC, so we can convert it or format it
-        # Let's strip the T and seconds for a clean look, or format it properly
-        # E.g. "2026-08-27T19:00:00" -> 19:00 (7:00 PM)
-        # Since we want it to look premium:
         start_dt = datetime.datetime.fromisoformat(start_iso)
         end_dt = datetime.datetime.fromisoformat(end_iso)
         
-        # Convert to local time representation (approx, since DB is UTC)
-        # We can add 5.5 hours to mock Indian Standard Time (IST) if needed
-        # Let's do that for the display to be correct!
         start_local = start_dt + datetime.timedelta(hours=5, minutes=30)
         end_local = end_dt + datetime.timedelta(hours=5, minutes=30)
         
@@ -33,14 +24,12 @@ def format_time_range(start_iso: str, end_iso: str) -> str:
 def get_wind_forecast_48h() -> list:
     is_mock = USE_MOCK_DATA
     if is_mock:
-        # Mock forecast wind directions:
-        # NW (310) for first 16 hours, then shifting to SE (140)
         directions = []
         for h in range(48):
             if h < 16:
-                directions.append(310.0) # Towards Delhi
+                directions.append(310.0)
             else:
-                directions.append(140.0) # Away from Delhi
+                directions.append(140.0)
         return directions
         
     try:
@@ -50,7 +39,6 @@ def get_wind_forecast_48h() -> list:
         data = res.json()
         return data.get("hourly", {}).get("winddirection_10m", [310.0] * 48)
     except Exception:
-        # Fallback to mock
         directions = []
         for h in range(48):
             if h < 16:
@@ -59,30 +47,40 @@ def get_wind_forecast_48h() -> list:
                 directions.append(140.0)
         return directions
 
-def get_advice(user_type: str, db: Session) -> dict:
+def get_advice(user_type: str, db) -> dict:
     current_aqi_data = get_current_aqi(db)
     aqi_val = current_aqi_data["aqi_value"]
     
-    # Get mini forecast (next 24 hours of AQI)
-    forecast = db.query(models.ForecastCache).order_by(models.ForecastCache.hour_offset.asc()).limit(24).all()
+    cursor = db.cursor()
+    cursor.execute('''
+        SELECT timestamp, predicted_aqi 
+        FROM forecast_cache 
+        ORDER BY hour_offset ASC 
+        LIMIT 24
+    ''')
+    forecast = cursor.fetchall()
+    
     mini_forecast = []
     for item in forecast:
-        # Add 5.5 hours for IST display in the mini graph
-        local_time = item.timestamp + datetime.timedelta(hours=5, minutes=30)
+        timestamp_str = item['timestamp']
+        if isinstance(timestamp_str, str):
+            dt = datetime.datetime.fromisoformat(timestamp_str)
+        else:
+            dt = timestamp_str
+            
+        local_time = dt + datetime.timedelta(hours=5, minutes=30)
         mini_forecast.append({
             "timestamp": local_time.strftime("%I %p"),
-            "predicted_aqi": item.predicted_aqi
+            "predicted_aqi": item['predicted_aqi']
         })
         
     if not mini_forecast:
-        # Fallback mini forecast
         for h in range(1, 25):
             mini_forecast.append({
                 "timestamp": f"+{h}h",
                 "predicted_aqi": aqi_val
             })
             
-    # Process by user type
     if user_type == "worker":
         if aqi_val < 150:
             action = "Safe to work outside. No special precautions needed."
@@ -119,20 +117,16 @@ def get_advice(user_type: str, db: Session) -> dict:
             why = f"The AQI is {aqi_val}. Extreme pollution triggers immediate acute asthma attacks, stroke, and cardiovascular events. Mobilize additional ICU beds, oxygen supplies, and respiratory therapists."
             
     elif user_type == "farmer":
-        # Calculate wind direction for next 48 hours
         directions = get_wind_forecast_48h()
         
-        # Check if wind is blowing towards Delhi: 270 to 360 or 0 to 45
         def blows_to_delhi(deg):
             return (270.0 <= deg <= 360.0) or (0.0 <= deg <= 45.0)
             
         current_blows_delhi = blows_to_delhi(directions[0])
         
         if current_blows_delhi:
-            # Find when it shifts away
             shift_hour = -1
             for h in range(1, 48):
-                # Look for a window of at least 6 hours where it stays safe
                 if not blows_to_delhi(directions[h]):
                     is_window_safe = True
                     for k in range(h, min(h + 6, 48)):
@@ -152,7 +146,6 @@ def get_advice(user_type: str, db: Session) -> dict:
                 
             why = "Current atmospheric circulation creates a direct transport corridor from crop fields to the Delhi NCR basin. Burning now will immediately exacerbate the hazardous pollution crisis."
         else:
-            # Current wind is safe (blowing away). Find how long it remains safe.
             unsafe_hour = -1
             for h in range(1, 48):
                 if blows_to_delhi(directions[h]):

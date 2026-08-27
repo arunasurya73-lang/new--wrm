@@ -13,24 +13,21 @@ USE_MOCK_DATA = os.getenv("USE_MOCK_DATA", "false").lower() == "true"
 print(f"API KEY LOADED: {OPENWEATHER_API_KEY[:8] if OPENWEATHER_API_KEY else 'None'}...")
 print(f"MOCK MODE: {USE_MOCK_DATA}")
 
-import models
-from database import engine, SessionLocal
+from database import init_db, get_db
 from services.aqi_service import get_current_aqi, get_stations_aqi, get_aqi_label_and_color
 from services.weather_service import get_weather_data, get_inversion_label_and_description
 from services.fire_service import get_fires_data
 from services.forecast_service import generate_72h_forecast, get_best_time_outside
 from services.advice_service import get_advice
 
-# 1. Create SQLite tables on startup
-models.Base.metadata.create_all(bind=engine)
+init_db()
 
 app = Flask(__name__)
 CORS(app, origins=["*"])
 
-# 2. Setup Background Scheduler
 def refresh_cache_task():
     print(f"[{datetime.datetime.now()}] APScheduler background task starting...")
-    db = SessionLocal()
+    db = get_db()
     try:
         current = get_current_aqi(db)
         print(f"Cached current AQI: {current['aqi_value']}")
@@ -53,16 +50,14 @@ def refresh_cache_task():
     finally:
         db.close()
 
-# Start scheduler
 refresh_cache_task()
 scheduler = BackgroundScheduler()
 scheduler.add_job(refresh_cache_task, 'interval', minutes=30)
 scheduler.start()
 
-
 @app.route("/api/current-aqi", methods=["GET"])
 def api_current_aqi():
-    db = SessionLocal()
+    db = get_db()
     try:
         return jsonify(get_current_aqi(db))
     finally:
@@ -70,7 +65,7 @@ def api_current_aqi():
 
 @app.route("/api/stations", methods=["GET"])
 def api_stations():
-    db = SessionLocal()
+    db = get_db()
     try:
         return jsonify(get_stations_aqi(db))
     finally:
@@ -78,7 +73,7 @@ def api_stations():
 
 @app.route("/api/weather", methods=["GET"])
 def api_weather():
-    db = SessionLocal()
+    db = get_db()
     try:
         return jsonify(get_weather_data(db))
     finally:
@@ -86,7 +81,7 @@ def api_weather():
 
 @app.route("/api/inversion", methods=["GET"])
 def api_inversion():
-    db = SessionLocal()
+    db = get_db()
     try:
         weather = get_weather_data(db)
         strength = weather["inversion_strength"]
@@ -101,7 +96,7 @@ def api_inversion():
 
 @app.route("/api/fires", methods=["GET"])
 def api_fires():
-    db = SessionLocal()
+    db = get_db()
     try:
         return jsonify(get_fires_data(db))
     finally:
@@ -109,9 +104,16 @@ def api_fires():
 
 @app.route("/api/forecast", methods=["GET"])
 def api_forecast():
-    db = SessionLocal()
+    db = get_db()
     try:
-        forecast = db.query(models.ForecastCache).order_by(models.ForecastCache.hour_offset.asc()).all()
+        cursor = db.cursor()
+        cursor.execute('''
+            SELECT timestamp, hour_offset, predicted_aqi, predicted_pm25 
+            FROM forecast_cache 
+            ORDER BY hour_offset ASC
+        ''')
+        forecast = cursor.fetchall()
+        
         if not forecast:
             return jsonify(generate_72h_forecast(db))
             
@@ -121,16 +123,16 @@ def api_forecast():
         has_fires = fires_data["count"] > 0
         
         for item in forecast:
-            h = item.hour_offset
+            h = item['hour_offset']
             has_smoke = False
             if has_fires and h >= arrival_hours and h < 48:
                 has_smoke = True
                 
             res.append({
-                "timestamp": item.timestamp.isoformat(),
+                "timestamp": item['timestamp'],
                 "hour_offset": h,
-                "predicted_aqi": item.predicted_aqi,
-                "predicted_pm25": item.predicted_pm25,
+                "predicted_aqi": item['predicted_aqi'],
+                "predicted_pm25": item['predicted_pm25'],
                 "has_smoke": has_smoke
             })
         return jsonify(res)
@@ -139,7 +141,7 @@ def api_forecast():
 
 @app.route("/api/best-time", methods=["GET"])
 def api_best_time():
-    db = SessionLocal()
+    db = get_db()
     try:
         return jsonify(get_best_time_outside(db))
     finally:
@@ -149,7 +151,7 @@ def api_best_time():
 def api_advice(user_type):
     if user_type not in ["worker", "parent", "hospital", "farmer"]:
         return jsonify({"detail": "Invalid user_type. Choose worker, parent, hospital, or farmer."}), 400
-    db = SessionLocal()
+    db = get_db()
     try:
         return jsonify(get_advice(user_type, db))
     finally:
@@ -157,7 +159,7 @@ def api_advice(user_type):
 
 @app.route("/api/feedback-loop", methods=["GET"])
 def api_feedback_loop():
-    db = SessionLocal()
+    db = get_db()
     try:
         current = get_current_aqi(db)
         weather = get_weather_data(db)
@@ -170,8 +172,11 @@ def api_feedback_loop():
         
         inversion_tightening = "Yes" if (current_pm25 > 100.0 and inversion_strength >= 6) else "No"
         
-        forecast = db.query(models.ForecastCache).filter(models.ForecastCache.hour_offset == 6).first()
-        predicted_pm25_in_6_hours = forecast.predicted_pm25 if forecast else current_pm25 + 10.0
+        cursor = db.cursor()
+        cursor.execute("SELECT predicted_pm25 FROM forecast_cache WHERE hour_offset = 6 LIMIT 1")
+        forecast = cursor.fetchone()
+        
+        predicted_pm25_in_6_hours = forecast['predicted_pm25'] if forecast else current_pm25 + 10.0
         
         return jsonify({
             "current_pm25": current_pm25,
@@ -184,41 +189,50 @@ def api_feedback_loop():
 
 @app.route("/api/feedback", methods=["POST"])
 def create_feedback():
-    db = SessionLocal()
+    db = get_db()
     try:
         data = request.json
-        db_feedback = models.Feedback(
-            name=data.get("name"),
-            email=data.get("email"),
-            user_type=data.get("user_type"),
-            rating=data.get("rating"),
-            message=data.get("message"),
-            location=data.get("location"),
-            submitted_at=datetime.datetime.utcnow()
-        )
-        db.add(db_feedback)
+        cursor = db.cursor()
+        cursor.execute('''
+            INSERT INTO feedback (name, email, user_type, rating, message, location, submitted_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            data.get("name"),
+            data.get("email"),
+            data.get("user_type"),
+            data.get("rating"),
+            data.get("message"),
+            data.get("location"),
+            datetime.datetime.utcnow()
+        ))
         db.commit()
-        db.refresh(db_feedback)
         return jsonify({"message": "Feedback submitted successfully"})
     finally:
         db.close()
 
 @app.route("/api/feedback/all", methods=["GET"])
 def get_all_feedback():
-    db = SessionLocal()
+    db = get_db()
     try:
-        feedbacks = db.query(models.Feedback).order_by(models.Feedback.submitted_at.desc()).all()
+        cursor = db.cursor()
+        cursor.execute('''
+            SELECT id, name, email, user_type, rating, message, location, submitted_at 
+            FROM feedback 
+            ORDER BY submitted_at DESC
+        ''')
+        feedbacks = cursor.fetchall()
+        
         res = []
         for f in feedbacks:
             res.append({
-                "id": f.id,
-                "name": f.name,
-                "email": f.email,
-                "user_type": f.user_type,
-                "rating": f.rating,
-                "message": f.message,
-                "location": f.location,
-                "submitted_at": f.submitted_at.isoformat()
+                "id": f['id'],
+                "name": f['name'],
+                "email": f['email'],
+                "user_type": f['user_type'],
+                "rating": f['rating'],
+                "message": f['message'],
+                "location": f['location'],
+                "submitted_at": f['submitted_at']
             })
         return jsonify(res)
     finally:

@@ -3,8 +3,6 @@ import math
 import datetime
 import requests
 from dotenv import load_dotenv
-from sqlalchemy.orm import Session
-import models
 
 load_dotenv()
 
@@ -50,39 +48,30 @@ def get_aqi_label_and_color(aqi: int):
         return "Hazardous", "#7C2D12"
 
 def get_dynamic_mock_variation() -> int:
-    # Generate a time-based variation between -15 and +15
     now = datetime.datetime.now()
     hour = now.hour
     minute = now.minute
     time_val = hour + (minute / 60.0)
     return int(15 * math.sin(time_val * math.pi / 12))
 
-def get_current_aqi(db: Session) -> dict:
-    # Try fetching from OpenWeatherMap or use Cache or Mock
+def get_current_aqi(db) -> dict:
     is_mock = USE_MOCK_DATA or not OPENWEATHER_API_KEY or OPENWEATHER_API_KEY == "your_key_here"
     
     if is_mock:
         variation = get_dynamic_mock_variation()
         aqi_val = 287 + variation
-        # Calculate reverse PM2.5 roughly from AQI for realistic values
         pm25 = 116.5 + (variation * 0.4)
         pm10 = 185.0 + (variation * 0.6)
         o3 = 45.2 + (variation * 0.1)
         no2 = 32.1 + (variation * 0.15)
+        timestamp = datetime.datetime.utcnow()
         
-        # Save to DB cache
-        cache_entry = models.AQICache(
-            station_name="Delhi Overall",
-            aqi_value=aqi_val,
-            pm25=pm25,
-            pm10=pm10,
-            o3=o3,
-            no2=no2,
-            timestamp=datetime.datetime.utcnow()
-        )
-        db.add(cache_entry)
+        cursor = db.cursor()
+        cursor.execute('''
+            INSERT INTO aqi_cache (station_name, aqi_value, pm25, pm10, o3, no2, timestamp)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', ("Delhi Overall", aqi_val, pm25, pm10, o3, no2, timestamp))
         db.commit()
-        db.refresh(cache_entry)
         
         label, color = get_aqi_label_and_color(aqi_val)
         return {
@@ -93,7 +82,7 @@ def get_current_aqi(db: Session) -> dict:
             "no2": round(no2, 1),
             "color_code": color,
             "label": label,
-            "timestamp": cache_entry.timestamp.isoformat(),
+            "timestamp": timestamp.isoformat(),
             "is_cached": False
         }
         
@@ -110,20 +99,14 @@ def get_current_aqi(db: Session) -> dict:
         no2 = components.get("no2", 32.1)
         
         aqi_val = calculate_indian_aqi_pm25(pm25)
+        timestamp = datetime.datetime.utcnow()
         
-        # Save to database cache
-        cache_entry = models.AQICache(
-            station_name="Delhi Overall",
-            aqi_value=aqi_val,
-            pm25=pm25,
-            pm10=pm10,
-            o3=o3,
-            no2=no2,
-            timestamp=datetime.datetime.utcnow()
-        )
-        db.add(cache_entry)
+        cursor = db.cursor()
+        cursor.execute('''
+            INSERT INTO aqi_cache (station_name, aqi_value, pm25, pm10, o3, no2, timestamp)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', ("Delhi Overall", aqi_val, pm25, pm10, o3, no2, timestamp))
         db.commit()
-        db.refresh(cache_entry)
         
         label, color = get_aqi_label_and_color(aqi_val)
         return {
@@ -134,28 +117,34 @@ def get_current_aqi(db: Session) -> dict:
             "no2": round(no2, 1),
             "color_code": color,
             "label": label,
-            "timestamp": cache_entry.timestamp.isoformat(),
+            "timestamp": timestamp.isoformat(),
             "is_cached": False
         }
     except Exception as e:
         print(f"Error fetching current AQI: {e}. Serving cached data.")
-        # Fetch last saved from DB
-        last_cache = db.query(models.AQICache).filter(models.AQICache.station_name == "Delhi Overall").order_by(models.AQICache.timestamp.desc()).first()
+        cursor = db.cursor()
+        cursor.execute('''
+            SELECT aqi_value, pm25, pm10, o3, no2, timestamp 
+            FROM aqi_cache 
+            WHERE station_name = 'Delhi Overall' 
+            ORDER BY timestamp DESC LIMIT 1
+        ''')
+        last_cache = cursor.fetchone()
+        
         if last_cache:
-            label, color = get_aqi_label_and_color(last_cache.aqi_value)
+            label, color = get_aqi_label_and_color(last_cache['aqi_value'])
             return {
-                "aqi_value": last_cache.aqi_value,
-                "pm25": round(last_cache.pm25, 1),
-                "pm10": round(last_cache.pm10, 1),
-                "o3": round(last_cache.o3, 1),
-                "no2": round(last_cache.no2, 1),
+                "aqi_value": last_cache['aqi_value'],
+                "pm25": round(last_cache['pm25'], 1),
+                "pm10": round(last_cache['pm10'], 1),
+                "o3": round(last_cache['o3'], 1),
+                "no2": round(last_cache['no2'], 1),
                 "color_code": color,
                 "label": label,
-                "timestamp": last_cache.timestamp.isoformat(),
+                "timestamp": last_cache['timestamp'],
                 "is_cached": True
             }
         else:
-            # Fallback to hard mock
             aqi_val = 287
             label, color = get_aqi_label_and_color(aqi_val)
             return {
@@ -170,11 +159,11 @@ def get_current_aqi(db: Session) -> dict:
                 "is_cached": True
             }
 
-def get_stations_aqi(db: Session) -> list:
+def get_stations_aqi(db) -> list:
     is_mock = USE_MOCK_DATA or not OPENWEATHER_API_KEY or OPENWEATHER_API_KEY == "your_key_here"
     stations_data = []
-    
     variation = get_dynamic_mock_variation()
+    cursor = db.cursor()
     
     for name, info in STATIONS.items():
         if is_mock:
@@ -182,17 +171,10 @@ def get_stations_aqi(db: Session) -> list:
             pm25 = info["base_pm25"] + (variation * 0.4)
             pm10 = (info["base_pm25"] * 1.5) + (variation * 0.6)
             
-            # Save station to cache
-            cache_entry = models.AQICache(
-                station_name=name,
-                aqi_value=aqi_val,
-                pm25=pm25,
-                pm10=pm10,
-                o3=40.0,
-                no2=30.0,
-                timestamp=datetime.datetime.utcnow()
-            )
-            db.add(cache_entry)
+            cursor.execute('''
+                INSERT INTO aqi_cache (station_name, aqi_value, pm25, pm10, o3, no2, timestamp)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (name, aqi_val, pm25, pm10, 40.0, 30.0, datetime.datetime.utcnow()))
             db.commit()
             
             label, color = get_aqi_label_and_color(aqi_val)
@@ -219,17 +201,10 @@ def get_stations_aqi(db: Session) -> list:
                 
                 aqi_val = calculate_indian_aqi_pm25(pm25)
                 
-                # Save station to cache
-                cache_entry = models.AQICache(
-                    station_name=name,
-                    aqi_value=aqi_val,
-                    pm25=pm25,
-                    pm10=pm10,
-                    o3=o3,
-                    no2=no2,
-                    timestamp=datetime.datetime.utcnow()
-                )
-                db.add(cache_entry)
+                cursor.execute('''
+                    INSERT INTO aqi_cache (station_name, aqi_value, pm25, pm10, o3, no2, timestamp)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                ''', (name, aqi_val, pm25, pm10, o3, no2, datetime.datetime.utcnow()))
                 db.commit()
                 
                 label, color = get_aqi_label_and_color(aqi_val)
@@ -244,21 +219,26 @@ def get_stations_aqi(db: Session) -> list:
                 })
             except Exception as e:
                 print(f"Error fetching station {name}: {e}. Serving from cache.")
-                # Fetch from cache
-                last_cache = db.query(models.AQICache).filter(models.AQICache.station_name == name).order_by(models.AQICache.timestamp.desc()).first()
+                cursor.execute('''
+                    SELECT aqi_value, pm25, timestamp 
+                    FROM aqi_cache 
+                    WHERE station_name = ? 
+                    ORDER BY timestamp DESC LIMIT 1
+                ''', (name,))
+                last_cache = cursor.fetchone()
+                
                 if last_cache:
-                    label, color = get_aqi_label_and_color(last_cache.aqi_value)
+                    label, color = get_aqi_label_and_color(last_cache['aqi_value'])
                     stations_data.append({
                         "station_name": name,
                         "latitude": info["lat"],
                         "longitude": info["lon"],
-                        "aqi_value": last_cache.aqi_value,
-                        "pm25": round(last_cache.pm25, 1),
+                        "aqi_value": last_cache['aqi_value'],
+                        "pm25": round(last_cache['pm25'], 1),
                         "label": label,
                         "color_code": color
                     })
                 else:
-                    # Fallback to base
                     aqi_val = info["base_aqi"]
                     label, color = get_aqi_label_and_color(aqi_val)
                     stations_data.append({
