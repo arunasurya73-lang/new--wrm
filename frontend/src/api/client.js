@@ -1,7 +1,7 @@
 import axios from 'axios'
 
 const api = axios.create({
-  baseURL: 'http://localhost:8000',
+  baseURL: 'https://new-wrm-1.onrender.com',
   timeout: 60000,
 })
 
