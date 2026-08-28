@@ -89,22 +89,22 @@ Current Delhi NCR live data:
 ` : 'Live data not available right now.'
 
       const response = await fetch(
-        'https://api.anthropic.com/v1/messages',
+        'https://api.groq.com/openai/v1/chat/completions',
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'x-api-key': import.meta.env.VITE_ANTHROPIC_API_KEY || '',
-            'anthropic-version': '2023-06-01',
-            'anthropic-dangerous-direct-browser-access': 'true'
+            'Authorization': `Bearer ${import.meta.env.VITE_GROQ_API_KEY}`
           },
           body: JSON.stringify({
-            model: 'claude-3-5-sonnet-20240620',
-            max_tokens: 1000,
-            system: SYSTEM_PROMPT + '\n\n' + liveContext,
+            model: 'llama-3.3-70b-versatile',
+            max_tokens: 300,
             messages: [
-              ...messages.filter(m => m.role !== 'assistant' || 
-                messages.indexOf(m) > 0).map(m => ({
+              {
+                role: 'system',
+                content: SYSTEM_PROMPT + '\n\n' + liveContext
+              },
+              ...messages.filter((m, i) => i > 0).map(m => ({
                 role: m.role,
                 content: m.content
               })),
@@ -121,7 +121,7 @@ Current Delhi NCR live data:
       if (data.error) {
         throw new Error(data.error.message)
       }
-      const reply = data.content[0].text
+      const reply = data.choices[0].message.content
 
       setMessages(prev => [...prev, {
         role: 'assistant',
