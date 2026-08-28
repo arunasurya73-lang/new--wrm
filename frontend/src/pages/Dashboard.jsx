@@ -19,8 +19,8 @@ function Dashboard() {
   const [bestTime, setBestTime] = useState(null);
   const [feedback, setFeedback] = useState(null);
 
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchData = async (silent = false) => {
+    if (!silent) setLoading(true);
     setError(null);
     try {
       const [
@@ -52,12 +52,19 @@ function Dashboard() {
       console.error("Error loading dashboard data:", err);
       setError("Failed to fetch current monitoring data. Verify backend is running.");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
   useEffect(() => {
     fetchData();
+    
+    // Auto-refresh every 5 minutes (300,000 ms)
+    const intervalId = setInterval(() => {
+      fetchData(true);
+    }, 300000);
+    
+    return () => clearInterval(intervalId);
   }, []);
 
   if (loading) {
@@ -104,6 +111,17 @@ function Dashboard() {
     }
   };
 
+  const formatLastUpdated = (timestamp) => {
+    if (!timestamp) return new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+    try {
+      const date = new Date(timestamp);
+      if (isNaN(date.getTime())) return new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+      return date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+    } catch {
+      return new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+    }
+  };
+
   return (
     <div className="space-y-6 animate-fadeIn pb-12">
       {/* New Live AQI Broadcast Hero */}
@@ -123,7 +141,7 @@ function Dashboard() {
                   <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)]"></span>
                   <span className="text-red-500 text-xs font-bold tracking-widest">LIVE</span>
                 </div>
-                <span className="text-xs text-gray-400 font-mono font-medium">Last Updated: {new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} (Local Time)</span>
+                <span className="text-xs text-gray-400 font-mono font-medium">Last Updated: {formatLastUpdated(currentAQI.timestamp)} (Local Time)</span>
               </div>
               <h1 className="text-2xl md:text-3xl font-black text-white tracking-tight">Delhi Air Quality Index (AQI) | Air Pollution</h1>
               <p className="text-sm text-gray-400 mt-1 font-medium">Real-time PM2.5, PM10 air pollution level in Delhi NCR</p>

@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 USE_MOCK_DATA = os.getenv("USE_MOCK_DATA", "false").lower() == "true"
-OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY", "")
+WAQI_API_KEY = os.getenv("WAQI_API_KEY", "")
 
 STATIONS = {
     "Rohini": {"lat": 28.7489, "lon": 77.0758, "base_aqi": 312, "base_pm25": 128.0},
@@ -55,7 +55,7 @@ def get_dynamic_mock_variation() -> int:
     return int(15 * math.sin(time_val * math.pi / 12))
 
 def get_current_aqi(db) -> dict:
-    is_mock = USE_MOCK_DATA or not OPENWEATHER_API_KEY or OPENWEATHER_API_KEY == "your_key_here"
+    is_mock = USE_MOCK_DATA or not WAQI_API_KEY or WAQI_API_KEY == "your_key_here"
     
     if is_mock:
         variation = get_dynamic_mock_variation()
@@ -87,19 +87,31 @@ def get_current_aqi(db) -> dict:
         }
         
     try:
-        url = f"http://api.openweathermap.org/data/2.5/air_pollution?lat=28.6139&lon=77.2090&appid={OPENWEATHER_API_KEY}"
+        url = f"https://api.waqi.info/feed/delhi/?token={WAQI_API_KEY}"
         res = requests.get(url, timeout=30)
         res.raise_for_status()
         data = res.json()
         
-        components = data["list"][0]["components"]
-        pm25 = components.get("pm2_5", 116.5)
-        pm10 = components.get("pm10", 185.0)
-        o3 = components.get("o3", 45.2)
-        no2 = components.get("no2", 32.1)
+        if data.get("status") != "ok":
+            raise Exception("WAQI API returned non-ok status: " + str(data.get("data")))
         
-        aqi_val = calculate_indian_aqi_pm25(pm25)
-        timestamp = datetime.datetime.utcnow()
+        iaqi = data["data"].get("iaqi", {})
+        pm25 = iaqi.get("pm25", {}).get("v", 116.5)
+        pm10 = iaqi.get("pm10", {}).get("v", 185.0)
+        o3 = iaqi.get("o3", {}).get("v", 45.2)
+        no2 = iaqi.get("no2", {}).get("v", 32.1)
+        
+        # Ensure aqi is an integer
+        try:
+            aqi_val = int(data["data"].get("aqi", calculate_indian_aqi_pm25(pm25)))
+        except (ValueError, TypeError):
+            aqi_val = calculate_indian_aqi_pm25(pm25)
+            
+        waqi_time = data["data"].get("time", {}).get("iso")
+        if waqi_time:
+            timestamp = waqi_time
+        else:
+            timestamp = datetime.datetime.utcnow().isoformat()
         
         cursor = db.cursor()
         cursor.execute('''
@@ -117,11 +129,11 @@ def get_current_aqi(db) -> dict:
             "no2": round(no2, 1),
             "color_code": color,
             "label": label,
-            "timestamp": timestamp.isoformat(),
+            "timestamp": timestamp,
             "is_cached": False
         }
     except Exception as e:
-        print(f"Error fetching current AQI: {e}. Serving cached data.")
+        print(f"Error fetching current AQI: {e}. Checking cache.")
         cursor = db.cursor()
         cursor.execute('''
             SELECT aqi_value, pm25, pm10, o3, no2, timestamp 
@@ -132,6 +144,16 @@ def get_current_aqi(db) -> dict:
         last_cache = cursor.fetchone()
         
         if last_cache:
+            try:
+                # If cache is older than 2 hours, raise exception to trigger frontend error state
+                cache_time_str = last_cache['timestamp'].split('+')[0].replace('Z', '')
+                cache_time = datetime.datetime.fromisoformat(cache_time_str)
+                if (datetime.datetime.utcnow() - cache_time).total_seconds() > 7200:
+                    raise Exception("Live data unavailable and cache is stale")
+            except ValueError:
+                # If timestamp parsing fails, assume stale
+                raise Exception("Live data unavailable and cache timestamp invalid")
+                
             label, color = get_aqi_label_and_color(last_cache['aqi_value'])
             return {
                 "aqi_value": last_cache['aqi_value'],
@@ -145,22 +167,10 @@ def get_current_aqi(db) -> dict:
                 "is_cached": True
             }
         else:
-            aqi_val = 287
-            label, color = get_aqi_label_and_color(aqi_val)
-            return {
-                "aqi_value": aqi_val,
-                "pm25": 116.5,
-                "pm10": 185.0,
-                "o3": 45.2,
-                "no2": 32.1,
-                "color_code": color,
-                "label": label,
-                "timestamp": datetime.datetime.utcnow().isoformat(),
-                "is_cached": True
-            }
+            raise Exception("Live data unavailable and no cache")
 
 def get_stations_aqi(db) -> list:
-    is_mock = USE_MOCK_DATA or not OPENWEATHER_API_KEY or OPENWEATHER_API_KEY == "your_key_here"
+    is_mock = USE_MOCK_DATA or not WAQI_API_KEY or WAQI_API_KEY == "your_key_here"
     stations_data = []
     variation = get_dynamic_mock_variation()
     cursor = db.cursor()
@@ -189,22 +199,29 @@ def get_stations_aqi(db) -> list:
             })
         else:
             try:
-                url = f"http://api.openweathermap.org/data/2.5/air_pollution?lat={info['lat']}&lon={info['lon']}&appid={OPENWEATHER_API_KEY}"
+                url = f"https://api.waqi.info/feed/geo:{info['lat']};{info['lon']}/?token={WAQI_API_KEY}"
                 res = requests.get(url, timeout=30)
                 res.raise_for_status()
                 data = res.json()
-                components = data["list"][0]["components"]
-                pm25 = components.get("pm2_5", info["base_pm25"])
-                pm10 = components.get("pm10", pm25 * 1.5)
-                o3 = components.get("o3", 40.0)
-                no2 = components.get("no2", 30.0)
                 
-                aqi_val = calculate_indian_aqi_pm25(pm25)
+                if data.get("status") != "ok":
+                    raise Exception("WAQI API returned non-ok status")
+                    
+                iaqi = data["data"].get("iaqi", {})
+                pm25 = iaqi.get("pm25", {}).get("v", info["base_pm25"])
+                pm10 = iaqi.get("pm10", {}).get("v", pm25 * 1.5)
+                o3 = iaqi.get("o3", {}).get("v", 40.0)
+                no2 = iaqi.get("no2", {}).get("v", 30.0)
+                
+                try:
+                    aqi_val = int(data["data"].get("aqi", calculate_indian_aqi_pm25(pm25)))
+                except (ValueError, TypeError):
+                    aqi_val = calculate_indian_aqi_pm25(pm25)
                 
                 cursor.execute('''
                     INSERT INTO aqi_cache (station_name, aqi_value, pm25, pm10, o3, no2, timestamp)
                     VALUES (?, ?, ?, ?, ?, ?, ?)
-                ''', (name, aqi_val, pm25, pm10, o3, no2, datetime.datetime.utcnow()))
+                ''', (name, aqi_val, pm25, pm10, o3, no2, datetime.datetime.utcnow().isoformat()))
                 db.commit()
                 
                 label, color = get_aqi_label_and_color(aqi_val)
@@ -239,6 +256,7 @@ def get_stations_aqi(db) -> list:
                         "color_code": color
                     })
                 else:
+                    # Fallback to base
                     aqi_val = info["base_aqi"]
                     label, color = get_aqi_label_and_color(aqi_val)
                     stations_data.append({
