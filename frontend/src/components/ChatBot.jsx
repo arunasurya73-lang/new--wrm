@@ -104,9 +104,14 @@ Wind Speed: ${liveData.windSpeed} km/h
       )
 
       const data = await res.json()
-      const reply = data.candidates[0].content.parts[0].text
+      console.log('Full Gemini data:', JSON.stringify(data))
 
-      if (reply) {
+      if (data.candidates && 
+          data.candidates[0] && 
+          data.candidates[0].content &&
+          data.candidates[0].content.parts &&
+          data.candidates[0].content.parts[0]) {
+        const reply = data.candidates[0].content.parts[0].text
         setMessages(prev => [...prev, {
           role: 'assistant',
           content: reply
@@ -114,7 +119,7 @@ Wind Speed: ${liveData.windSpeed} km/h
       } else if (data.error) {
         throw new Error(data.error.message)
       } else {
-        throw new Error('Unexpected response')
+        throw new Error(JSON.stringify(data))
       }
 
     } catch (err) {
