@@ -38,8 +38,8 @@ function StationMap({ stations }) {
       });
 
       // Add CartoDB Dark Matter tiles with required attribution
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        attribution: 'Map &copy; CartoDB | Data &copy; OpenStreetMap',
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors',
         subdomains: 'abcd',
         maxZoom: 20
       }).addTo(mapInstance.current);

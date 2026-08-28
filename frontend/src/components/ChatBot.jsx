@@ -77,37 +77,38 @@ export default function ChatBot() {
     }])
     setLoading(true)
 
-    try {
-      const liveContext = liveData ? `
-Current Delhi NCR live data:
-- AQI: ${liveData.aqi} (${liveData.label})
-- PM2.5: ${liveData.pm25} μg/m³
-- PM10: ${liveData.pm10} μg/m³
-- Temperature: ${liveData.temperature}°C
-- Wind Speed: ${liveData.windSpeed} km/h
-- Inversion Strength: ${liveData.inversionStrength}/10
-` : 'Live data not available right now.'
+    const liveContext = liveData ? `
+Current Delhi live data:
+AQI: ${liveData.aqi} (${liveData.label})
+PM2.5: ${liveData.pm25}
+Temperature: ${liveData.temperature}°C
+Wind Speed: ${liveData.windSpeed} km/h
+` : 'Live data unavailable.'
 
-      const response = await fetch(
+    try {
+      const groqKey = import.meta.env.VITE_GROQ_API_KEY
+      console.log('Key loaded:', groqKey ? 'YES' : 'NO')
+
+      const res = await fetch(
         'https://api.groq.com/openai/v1/chat/completions',
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${import.meta.env.VITE_GROQ_API_KEY}`
+            'Authorization': 'Bearer ' + groqKey
           },
           body: JSON.stringify({
             model: 'llama-3.3-70b-versatile',
-            max_tokens: 300,
+            max_tokens: 200,
             messages: [
               {
                 role: 'system',
-                content: SYSTEM_PROMPT + '\n\n' + liveContext
+                content: `You are AirBot, a helpful 
+assistant for Delhi air quality. 
+Answer in 2-3 short sentences max.
+Use simple language and emojis.
+${liveContext}`
               },
-              ...messages.filter((m, i) => i > 0).map(m => ({
-                role: m.role,
-                content: m.content
-              })),
               {
                 role: 'user',
                 content: userMessage
@@ -117,23 +118,27 @@ Current Delhi NCR live data:
         }
       )
 
-      const data = await response.json()
-      if (data.error) {
-        throw new Error(data.error.message)
-      }
-      const reply = data.choices[0].message.content
+      const data = await res.json()
+      console.log('Groq response:', data)
 
-      setMessages(prev => [...prev, {
-        role: 'assistant',
-        content: reply
-      }])
+      if (data.choices && data.choices[0]) {
+        const reply = data.choices[0].message.content
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: reply
+        }])
+      } else {
+        throw new Error('No response from Groq')
+      }
+
     } catch (err) {
-      console.error(err)
+      console.error('Chatbot error:', err)
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: '😔 Sorry, I could not connect right now. Please try again in a moment.'
+        content: '😔 Could not connect. Error: ' + err.message
       }])
     }
+
     setLoading(false)
   }
 
