@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Wind, Flame, ShieldAlert, HelpCircle, Menu, X, Clock, MessageSquare } from 'lucide-react';
+import { Wind, Flame, ShieldAlert, HelpCircle, Menu, X, Clock, MessageSquare, BellRing } from 'lucide-react';
 import NotificationBell from './NotificationBell';
 
 function Navbar({ currentPage, setPage }) {
@@ -15,9 +15,11 @@ function Navbar({ currentPage, setPage }) {
     { id: 'dashboard', label: 'Dashboard', icon: Wind },
     { id: 'smoke', label: 'Smoke Tracker', icon: Flame },
     { id: 'advice', label: 'Advice', icon: ShieldAlert },
+    { id: 'alert-system', label: 'Alert System', icon: BellRing },
     { id: 'how-it-works', label: 'How It Works', icon: HelpCircle },
     { id: 'feedback', label: 'Feedback', icon: MessageSquare },
   ];
+
 
 
   return (

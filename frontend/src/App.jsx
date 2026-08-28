@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Navbar from './components/Navbar';
 import Dashboard from './pages/Dashboard';
 import SmokeTracker from './pages/SmokeTracker';
@@ -6,9 +6,25 @@ import Advice from './pages/Advice';
 import HowItWorks from './pages/HowItWorks';
 import Feedback from './pages/Feedback';
 import ChatBot from './components/ChatBot';
+import AlertSystem from './pages/AlertSystem';
 
 function App() {
   const [page, setPage] = useState('dashboard');
+
+  useEffect(() => {
+    setTimeout(() => {
+      if (Notification.permission === 'default') {
+        Notification.requestPermission().then(permission => {
+          if (permission === 'granted') {
+            new Notification('AirSense Delhi', {
+              body: '🔔 You will now receive real-time AQI alerts for Delhi NCR',
+              icon: '/favicon.ico'
+            })
+          }
+        })
+      }
+    }, 3000)
+  }, [])
 
   return (
     <div className="min-h-screen bg-darkBg text-textPrimary flex flex-col font-sans">
@@ -19,6 +35,7 @@ function App() {
         {page === 'advice' && <Advice />}
         {page === 'how-it-works' && <HowItWorks />}
         {page === 'feedback' && <Feedback />}
+        {page === 'alert-system' && <AlertSystem />}
       </main>
       <footer className="border-t border-gray-800 bg-[#070b16] py-6 text-center text-sm text-textSecondary">
         <p>© 2026 AirSense Delhi. Real-time Air Quality Forecasting & Stubble Burning Analysis.</p>
