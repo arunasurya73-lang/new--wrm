@@ -311,7 +311,7 @@ function Dashboard() {
             />
           )}
         </div>
-      </div>
+
 
       {/* Delhi NCR map */}
       <div className="w-full">
