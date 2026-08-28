@@ -5,6 +5,7 @@ import SmokeTracker from './pages/SmokeTracker';
 import Advice from './pages/Advice';
 import HowItWorks from './pages/HowItWorks';
 import Feedback from './pages/Feedback';
+import ChatBot from './components/ChatBot';
 
 function App() {
   const [page, setPage] = useState('dashboard');
@@ -23,6 +24,7 @@ function App() {
         <p>© 2026 AirSense Delhi. Real-time Air Quality Forecasting & Stubble Burning Analysis.</p>
         <p className="mt-1 text-xs text-gray-600">CPCB / NASA FIRMS / Open-Meteo Integrated Systems.</p>
       </footer>
+      <ChatBot />
     </div>
   );
 }

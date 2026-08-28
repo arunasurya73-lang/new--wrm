@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Wind, Flame, ShieldAlert, HelpCircle, Menu, X, Clock, MessageSquare } from 'lucide-react';
+import NotificationBell from './NotificationBell';
 
 function Navbar({ currentPage, setPage }) {
   const [time, setTime] = useState(new Date());
@@ -55,10 +56,13 @@ function Navbar({ currentPage, setPage }) {
             })}
           </div>
 
-          {/* Clock Display */}
-          <div className="hidden lg:flex items-center space-x-2 bg-gray-900/60 px-3.5 py-1.5 rounded-full border border-gray-800 text-xs text-textSecondary font-mono">
-            <Clock className="h-3.5 w-3.5 text-blue-500 animate-spin-slow" style={{ animationDuration: '6s' }} />
-            <span>{time.toLocaleTimeString()}</span>
+          {/* Right Side Actions */}
+          <div className="hidden lg:flex items-center space-x-4">
+            <NotificationBell />
+            <div className="flex items-center space-x-2 bg-gray-900/60 px-3.5 py-1.5 rounded-full border border-gray-800 text-xs text-textSecondary font-mono">
+              <Clock className="h-3.5 w-3.5 text-blue-500 animate-spin-slow" style={{ animationDuration: '6s' }} />
+              <span>{time.toLocaleTimeString()}</span>
+            </div>
           </div>
 
           {/* Mobile menu button */}
