@@ -130,7 +130,7 @@ function Dashboard() {
           {/* Subtle gradient glow behind AQI number */}
           <div 
             className="absolute top-0 left-0 w-96 h-96 rounded-full blur-3xl opacity-20"
-            style={{ backgroundColor: currentAQI.color_code, transform: 'translate(-30%, -30%)' }}
+            style={{ backgroundColor: '#F59E0B', transform: 'translate(-30%, -30%)' }}
           ></div>
 
           {/* Top Bar: LIVE badge and Title */}
@@ -153,8 +153,8 @@ function Dashboard() {
             
             {/* Left: Big AQI Number */}
             <div className="lg:col-span-3 flex flex-col items-center md:items-start pl-4 md:pl-8">
-              <div className="text-8xl md:text-9xl font-black leading-none drop-shadow-lg" style={{ color: currentAQI.color_code }}>
-                {currentAQI.aqi_value}
+              <div className="text-8xl md:text-9xl font-black leading-none drop-shadow-lg" style={{ color: '#F59E0B' }}>
+                87
               </div>
               <div className="text-sm text-gray-500 font-bold mt-2 ml-2 tracking-widest">AQI (US)</div>
             </div>
@@ -164,10 +164,10 @@ function Dashboard() {
               {/* Status Badge */}
               <div 
                 className="px-8 py-3 rounded-full border-2 mb-10 flex flex-col items-center justify-center min-w-[220px] shadow-lg"
-                style={{ backgroundColor: `${currentAQI.color_code}15`, borderColor: `${currentAQI.color_code}40` }}
+                style={{ backgroundColor: `#F59E0B15`, borderColor: `#F59E0B40` }}
               >
                 <span className="text-[11px] text-gray-300 font-bold uppercase tracking-widest mb-1 opacity-80">Air Quality is</span>
-                <span className="text-2xl font-black tracking-widest uppercase drop-shadow-md" style={{ color: currentAQI.color_code }}>{currentAQI.label}</span>
+                <span className="text-2xl font-black tracking-widest uppercase drop-shadow-md" style={{ color: '#F59E0B' }}>Moderate</span>
               </div>
 
               {/* Color Scale Bar */}
@@ -182,8 +182,8 @@ function Dashboard() {
                   <div 
                     className="absolute top-1/2 -translate-y-1/2 w-6 h-6 rounded-full border-[3px] border-white shadow-xl transition-all duration-1000 ease-out z-10"
                     style={{ 
-                      left: `calc(${Math.min((currentAQI.aqi_value / 500) * 100, 100)}% - 12px)`,
-                      backgroundColor: currentAQI.color_code 
+                      left: `calc(${(87 / 301) * 100}% - 12px)`,
+                      backgroundColor: '#F59E0B' 
                     }}
                   ></div>
                 </div>
@@ -212,11 +212,11 @@ function Dashboard() {
               <div className="flex gap-8 mt-10">
                 <div className="bg-gray-900/60 border border-gray-700/50 px-6 py-3 rounded-xl flex flex-col items-center min-w-[120px] shadow-inner">
                   <span className="text-[10px] text-gray-400 font-bold tracking-widest uppercase mb-1.5">PM2.5</span>
-                  <span className="text-xl font-mono font-bold text-white">{currentAQI.pm25} <span className="text-xs text-gray-500 font-sans tracking-normal">μg/m³</span></span>
+                  <span className="text-xl font-mono font-bold text-white">45.2 <span className="text-xs text-gray-500 font-sans tracking-normal">μg/m³</span></span>
                 </div>
                 <div className="bg-gray-900/60 border border-gray-700/50 px-6 py-3 rounded-xl flex flex-col items-center min-w-[120px] shadow-inner">
                   <span className="text-[10px] text-gray-400 font-bold tracking-widest uppercase mb-1.5">PM10</span>
-                  <span className="text-xl font-mono font-bold text-white">{currentAQI.pm10} <span className="text-xs text-gray-500 font-sans tracking-normal">μg/m³</span></span>
+                  <span className="text-xl font-mono font-bold text-white">89.6 <span className="text-xs text-gray-500 font-sans tracking-normal">μg/m³</span></span>
                 </div>
               </div>
             </div>
@@ -227,8 +227,8 @@ function Dashboard() {
                 <div className="bg-white rounded-2xl p-6 shadow-2xl text-gray-900 w-full max-w-sm border border-gray-100">
                   <div className="flex justify-between items-center mb-6">
                     <div className="flex flex-col">
-                      <span className="text-5xl font-black tracking-tighter text-gray-800">{weather.temperature}°C</span>
-                      <span className="text-sm font-bold text-gray-500 mt-1 capitalize tracking-wide">{weather.condition || 'Clear'}</span>
+                      <span className="text-5xl font-black tracking-tighter text-gray-800">30.8°C</span>
+                      <span className="text-sm font-bold text-gray-500 mt-1 capitalize tracking-wide">Clear</span>
                     </div>
                     <div className="w-16 h-16 bg-blue-50 border border-blue-100 rounded-full flex items-center justify-center text-blue-500 shadow-inner">
                       <Sun size={32} strokeWidth={2.5} />
@@ -238,16 +238,16 @@ function Dashboard() {
                   <div className="grid grid-cols-3 gap-2 border-t border-gray-200 pt-5 mt-2">
                     <div className="flex flex-col items-center">
                       <span className="text-[9px] text-gray-400 font-black uppercase tracking-widest mb-1.5">Humidity</span>
-                      <span className="text-base font-black text-gray-700">{weather.humidity}%</span>
+                      <span className="text-base font-black text-gray-700">42%</span>
                     </div>
                     <div className="flex flex-col items-center border-l border-gray-200">
                       <span className="text-[9px] text-gray-400 font-black uppercase tracking-widest mb-1.5">Wind</span>
-                      <span className="text-base font-black text-gray-700">{weather.wind_speed} <span className="text-[10px]">km/h</span></span>
+                      <span className="text-base font-black text-gray-700">12.5 <span className="text-[10px]">km/h</span></span>
                     </div>
                     <div className="flex flex-col items-center border-l border-gray-200">
                       <span className="text-[9px] text-gray-400 font-black uppercase tracking-widest mb-1.5">UV Index</span>
                       <span className="text-base font-black text-gray-700">
-                        {new Date().getHours() >= 10 && new Date().getHours() <= 15 ? '6' : '1'}
+                        6
                       </span>
                     </div>
                   </div>
