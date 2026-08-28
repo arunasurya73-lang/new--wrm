@@ -24,10 +24,12 @@ function FireMap({ fireLocations, windDirection, windSpeed }) {
       });
 
       // Add OpenStreetMap tiles with error fallback
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors',
-        subdomains: 'abcd',
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap',
         maxZoom: 18,
+        keepBuffer: 4,
+        updateWhenIdle: false,
+        updateWhenZooming: false,
         errorTileUrl: 'https://tile.openstreetmap.org/0/0/0.png'
       }).addTo(mapInstance.current);
 

@@ -38,10 +38,12 @@ function StationMap({ stations }) {
       });
 
       // Add CartoDB Dark Matter tiles with required attribution
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors',
-        subdomains: 'abcd',
-        maxZoom: 20
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap',
+        maxZoom: 18,
+        keepBuffer: 4,
+        updateWhenIdle: false,
+        updateWhenZooming: false
       }).addTo(mapInstance.current);
 
       // Draw a subtle Delhi NCR boundary box inline — no external network dependency
