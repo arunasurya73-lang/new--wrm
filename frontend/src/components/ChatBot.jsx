@@ -87,7 +87,6 @@ Wind Speed: ${liveData.windSpeed} km/h
 
     try {
       const groqKey = import.meta.env.VITE_GROQ_API_KEY
-      console.log('Key loaded:', groqKey ? 'YES' : 'NO')
 
       const res = await fetch(
         'https://api.groq.com/openai/v1/chat/completions',
@@ -103,11 +102,7 @@ Wind Speed: ${liveData.windSpeed} km/h
             messages: [
               {
                 role: 'system',
-                content: `You are AirBot, a helpful 
-assistant for Delhi air quality. 
-Answer in 2-3 short sentences max.
-Use simple language and emojis.
-${liveContext}`
+                content: 'You are AirBot, a helpful assistant for Delhi NCR air quality. Answer in 2 short sentences. Use emojis. Current AQI is ' + (liveData ? liveData.aqi : 'unknown') + '.'
               },
               {
                 role: 'user',
@@ -118,24 +113,26 @@ ${liveContext}`
         }
       )
 
-      const data = await res.json()
-      console.log('Groq response:', data)
+      const text = await res.text()
+      console.log('Raw response:', text)
+      const data = JSON.parse(text)
 
       if (data.choices && data.choices[0]) {
-        const reply = data.choices[0].message.content
         setMessages(prev => [...prev, {
           role: 'assistant',
-          content: reply
+          content: data.choices[0].message.content
         }])
+      } else if (data.error) {
+        throw new Error(data.error.message)
       } else {
-        throw new Error('No response from Groq')
+        throw new Error('Unexpected response: ' + text)
       }
 
     } catch (err) {
-      console.error('Chatbot error:', err)
+      console.error('Full error:', err)
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: '😔 Could not connect. Error: ' + err.message
+        content: '❌ Error: ' + err.message
       }])
     }
 
