@@ -1,293 +1,386 @@
-import React, { useState } from 'react';
-import { ShieldAlert, Send, Clock, Users, MapPin, Activity, CheckCircle2, AlertTriangle, Flame, Snowflake, Loader2 } from 'lucide-react';
+import { useState } from 'react'
+
+const ALERT_TYPES = [
+  {
+    id: 'hazardous',
+    label: '🚨 Hazardous Emergency',
+    color: '#7F1D1D',
+    badge: 'bg-red-900 text-red-300',
+    defaultMessage: 'AQI has crossed 350 in your area. This is a health emergency. Stay indoors immediately. Close all windows and doors.',
+    aqi: '350+'
+  },
+  {
+    id: 'very-unhealthy',
+    label: '🔴 Very Unhealthy Alert',
+    color: '#991B1B',
+    badge: 'bg-red-800 text-red-200',
+    defaultMessage: 'AQI has crossed 250. Very unhealthy air quality detected. Avoid all outdoor activity. Schools advised to cancel outdoor sessions.',
+    aqi: '250+'
+  },
+  {
+    id: 'unhealthy',
+    label: '🟠 Unhealthy Warning',
+    color: '#92400E',
+    badge: 'bg-orange-900 text-orange-300',
+    defaultMessage: 'AQI has crossed 180. Unhealthy air quality. Wear N95 mask if going outside. Sensitive groups should stay indoors.',
+    aqi: '180+'
+  },
+  {
+    id: 'stubble',
+    label: '🌫️ Stubble Burn Incoming',
+    color: '#78350F',
+    badge: 'bg-yellow-900 text-yellow-300',
+    defaultMessage: 'Satellite detected 47 active fires in Punjab. Smoke plume moving toward Delhi. Expected arrival in 8 hours. Prepare for AQI spike.',
+    aqi: 'Fire Alert'
+  },
+  {
+    id: 'inversion',
+    label: '❄️ Severe Inversion Layer',
+    color: '#1E3A5F',
+    badge: 'bg-blue-900 text-blue-300',
+    defaultMessage: 'Severe inversion layer detected at 200 metres. Pollution trapped near ground. No wind relief expected for 24 hours. AQI will rise significantly.',
+    aqi: 'Inversion'
+  },
+  {
+    id: 'moderate',
+    label: '🟡 Moderate Advisory',
+    color: '#713F12',
+    badge: 'bg-yellow-800 text-yellow-200',
+    defaultMessage: 'AQI is rising in your area. Sensitive groups including children and elderly should limit outdoor exposure.',
+    aqi: '120+'
+  }
+]
+
+const DISTRICTS = [
+  'All Delhi NCR',
+  'Rohini',
+  'Connaught Place',
+  'Noida',
+  'Gurgaon',
+  'Faridabad',
+  'Dwarka',
+  'Anand Vihar'
+]
+
+const INITIAL_ALERTS = [
+  {
+    id: 1,
+    type: ALERT_TYPES[0],
+    district: 'Anand Vihar',
+    message: 'AQI crossed 350. Immediate indoor shelter advised. All outdoor activities suspended.',
+    time: '15 minutes ago',
+    status: 'Delivered',
+    recipients: 12847
+  },
+  {
+    id: 2,
+    type: ALERT_TYPES[3],
+    district: 'All Delhi NCR',
+    message: 'Smoke plume detected 180km northwest. Expected arrival in 6 hours. Prepare for hazardous conditions.',
+    time: '1 hour ago',
+    status: 'Delivered',
+    recipients: 89234
+  },
+  {
+    id: 3,
+    type: ALERT_TYPES[1],
+    district: 'Rohini, Dwarka',
+    message: 'PM2.5 levels critical at 187 μg/m³. Schools advised to cancel all outdoor activities immediately.',
+    time: '3 hours ago',
+    status: 'Delivered',
+    recipients: 34521
+  },
+  {
+    id: 4,
+    type: ALERT_TYPES[4],
+    district: 'All Delhi NCR',
+    message: 'Severe inversion layer at 220m. Pollution trapped. No relief expected until Saturday afternoon.',
+    time: '5 hours ago',
+    status: 'Delivered',
+    recipients: 89234
+  },
+  {
+    id: 5,
+    type: ALERT_TYPES[2],
+    district: 'Noida, Faridabad',
+    message: 'AQI rising steadily. Sensitive groups advised to limit outdoor exposure to under 30 minutes.',
+    time: '8 hours ago',
+    status: 'Delivered',
+    recipients: 28943
+  }
+]
 
 export default function AlertSystem() {
-  const [loading, setLoading] = useState(false);
-  const [toast, setToast] = useState(null);
-  
-  const [alertType, setAlertType] = useState('Moderate Warning');
-  const [districts, setDistricts] = useState(['All Delhi NCR']);
-  const [message, setMessage] = useState('AQI rising. Sensitive groups advised to limit outdoor exposure.');
+  const [selectedType, setSelectedType] = useState(ALERT_TYPES[0])
+  const [selectedDistrict, setSelectedDistrict] = useState('All Delhi NCR')
+  const [message, setMessage] = useState(ALERT_TYPES[0].defaultMessage)
+  const [alerts, setAlerts] = useState(INITIAL_ALERTS)
+  const [sending, setSending] = useState(false)
+  const [toast, setToast] = useState(null)
+  const [totalSent, setTotalSent] = useState(47)
 
-  const [alerts, setAlerts] = useState([
-    {
-      id: 1,
-      type: 'Hazardous Emergency',
-      district: 'Anand Vihar',
-      message: 'AQI crossed 350. Immediate indoor shelter advised.',
-      time: '15 minutes ago',
-      status: 'Delivered'
-    },
-    {
-      id: 2,
-      type: 'Stubble Burn Incoming',
-      district: 'All Delhi NCR',
-      message: 'Smoke plume detected 180km northwest. Expected arrival 6 hours.',
-      time: '1 hour ago',
-      status: 'Delivered'
-    },
-    {
-      id: 3,
-      type: 'Very Unhealthy Alert',
-      district: 'Rohini, Dwarka',
-      message: 'PM2.5 levels critical. Schools advised to cancel outdoor activities.',
-      time: '3 hours ago',
-      status: 'Delivered'
-    },
-    {
-      id: 4,
-      type: 'Inversion Layer Detected',
-      district: 'All Delhi NCR',
-      message: 'Severe inversion layer at 220m. Pollution trapped. No relief expected until Saturday.',
-      time: '5 hours ago',
-      status: 'Delivered'
-    },
-    {
-      id: 5,
-      type: 'Moderate Warning',
-      district: 'Noida, Faridabad',
-      message: 'AQI rising. Sensitive groups advised to limit outdoor exposure.',
-      time: '8 hours ago',
-      status: 'Delivered'
-    }
-  ]);
+  function handleTypeChange(typeId) {
+    const type = ALERT_TYPES.find(t => t.id === typeId)
+    setSelectedType(type)
+    setMessage(type.defaultMessage)
+  }
 
-  const alertTypes = [
-    { name: 'Moderate Warning', icon: '🟡', defaultMsg: 'AQI rising. Sensitive groups advised to limit outdoor exposure.' },
-    { name: 'Unhealthy Alert', icon: '🟠', defaultMsg: 'AQI is unhealthy. Avoid prolonged outdoor exertion.' },
-    { name: 'Very Unhealthy Alert', icon: '🔴', defaultMsg: 'PM2.5 levels critical. Schools advised to cancel outdoor activities.' },
-    { name: 'Hazardous Emergency', icon: '🚨', defaultMsg: 'AQI crossed 350. Immediate indoor shelter advised.' },
-    { name: 'Stubble Burn Incoming', icon: '🌫️', defaultMsg: 'Smoke plume detected. Expected arrival in a few hours.' },
-    { name: 'Severe Inversion Layer Detected', icon: '❄️', defaultMsg: 'Severe inversion layer detected. Pollution trapped. No relief expected.' }
-  ];
+  async function sendAlert() {
+    if (sending) return
+    setSending(true)
 
-  const availableDistricts = [
-    'All Delhi NCR', 'Rohini', 'Connaught Place', 'Noida',
-    'Gurgaon', 'Faridabad', 'Dwarka', 'Anand Vihar'
-  ];
+    await new Promise(r => setTimeout(r, 1500))
 
-  const handleTypeChange = (e) => {
-    const type = e.target.value;
-    setAlertType(type);
-    const selected = alertTypes.find(t => t.name === type);
-    if (selected) {
-      setMessage(selected.defaultMsg);
-    }
-  };
-
-  const handleDistrictChange = (e) => {
-    const options = e.target.options;
-    const selected = [];
-    for (let i = 0; i < options.length; i++) {
-      if (options[i].selected) {
-        selected.push(options[i].value);
-      }
-    }
-    setDistricts(selected.length > 0 ? selected : ['All Delhi NCR']);
-  };
-
-  const sendAlert = () => {
-    setLoading(true);
-    
-    setTimeout(() => {
-      // Send real browser notification if permitted
-      if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification(`AirSense: ${alertType}`, {
+    if (Notification.permission === 'granted') {
+      new Notification(selectedType.label + ' - Delhi NCR', {
+        body: message,
+        icon: '/favicon.ico',
+        requireInteraction: true,
+        badge: '/favicon.ico'
+      })
+    } else if (Notification.permission === 'default') {
+      const permission = await Notification.requestPermission()
+      if (permission === 'granted') {
+        new Notification(selectedType.label + ' - Delhi NCR', {
           body: message,
           icon: '/favicon.ico',
-          tag: 'aqi-alert'
-        });
+          requireInteraction: true
+        })
       }
+    }
 
-      const newAlert = {
-        id: Date.now(),
-        type: alertType,
-        district: districts.join(', '),
-        message: message,
-        time: 'Just now',
-        status: 'Delivered'
-      };
+    const recipients = selectedDistrict === 'All Delhi NCR' 
+      ? 89234 
+      : Math.floor(Math.random() * 30000) + 5000
 
-      setAlerts([newAlert, ...alerts]);
-      setLoading(false);
-      
-      setToast(`Alert sent successfully to ${districts.join(', ')}`);
-      setTimeout(() => setToast(null), 3000);
-    }, 1500);
-  };
+    const newAlert = {
+      id: Date.now(),
+      type: selectedType,
+      district: selectedDistrict,
+      message: message,
+      time: 'Just now',
+      status: 'Delivered',
+      recipients: recipients
+    }
 
-  const getTypeColor = (type) => {
-    if (type.includes('Moderate')) return 'bg-yellow-500/20 text-yellow-500 border-yellow-500/30';
-    if (type.includes('Very Unhealthy')) return 'bg-red-500/20 text-red-500 border-red-500/30';
-    if (type.includes('Unhealthy')) return 'bg-orange-500/20 text-orange-500 border-orange-500/30';
-    if (type.includes('Hazardous')) return 'bg-purple-500/20 text-purple-500 border-purple-500/30';
-    if (type.includes('Stubble')) return 'bg-gray-500/20 text-gray-400 border-gray-500/30';
-    if (type.includes('Inversion')) return 'bg-blue-500/20 text-blue-400 border-blue-500/30';
-    return 'bg-blue-600/20 text-blue-400 border-blue-600/30';
-  };
+    setAlerts(prev => [newAlert, ...prev])
+    setTotalSent(prev => prev + 1)
+    setSending(false)
+
+    setToast(`Alert sent to ${selectedDistrict}!`)
+    setTimeout(() => setToast(null), 3000)
+  }
 
   return (
-    <div className="space-y-6 animate-fadeIn pb-12">
-      {/* Toast Notification */}
+    <div className="min-h-screen p-6"
+      style={{backgroundColor: '#0A0F1E'}}>
+
+      {/* Toast */}
       {toast && (
-        <div className="fixed bottom-6 right-6 z-50 bg-green-900 border border-green-500 text-green-100 px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 animate-slideUp">
-          <CheckCircle2 className="h-5 w-5 text-green-400" />
-          <span className="font-medium">{toast}</span>
+        <div className="fixed top-6 right-6 z-50
+          bg-green-600 text-white px-6 py-3 
+          rounded-xl shadow-lg font-semibold
+          animate-bounce">
+          ✅ {toast}
         </div>
       )}
 
       {/* Header */}
-      <div className="border-b border-gray-800 pb-5">
-        <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-          <ShieldAlert className="h-8 w-8 text-blue-500" />
-          Emergency Alert System
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-white mb-2">
+          🚨 Emergency Alert System
         </h1>
-        <p className="mt-2 text-textSecondary text-lg">
-          Simulate and test AQI emergency alerts for Delhi NCR districts
+        <p className="text-gray-400">
+          Send real-time AQI emergency notifications 
+          to Delhi NCR residents
         </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* Left Column - Controls */}
-        <div className="lg:col-span-1 space-y-6">
-          <div className="bg-cardBg border border-gray-800 rounded-xl p-6 shadow-xl">
-            <h2 className="text-xl font-semibold text-white mb-6 flex items-center gap-2">
-              <Send className="h-5 w-5 text-blue-500" />
-              Alert Control Panel
-            </h2>
-
-            <div className="space-y-5">
-              <div>
-                <label className="block text-sm font-medium text-gray-400 mb-2">Select Alert Type</label>
-                <select 
-                  className="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                  value={alertType}
-                  onChange={handleTypeChange}
-                >
-                  {alertTypes.map(type => (
-                    <option key={type.name} value={type.name}>
-                      {type.icon} {type.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-400 mb-2">Select Target District</label>
-                <select 
-                  multiple
-                  className="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-500 focus:outline-none h-32"
-                  value={districts}
-                  onChange={handleDistrictChange}
-                >
-                  {availableDistricts.map(district => (
-                    <option key={district} value={district} className="py-1">{district}</option>
-                  ))}
-                </select>
-                <p className="text-xs text-gray-500 mt-2">Hold Ctrl/Cmd to select multiple districts</p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-400 mb-2">Alert Message</label>
-                <textarea 
-                  className="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-500 focus:outline-none h-24 resize-none"
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                />
-              </div>
-
-              <button
-                onClick={sendAlert}
-                disabled={loading || !message.trim()}
-                className="w-full bg-red-600 hover:bg-red-500 disabled:bg-gray-700 disabled:text-gray-500 text-white font-bold py-4 px-4 rounded-xl shadow-lg shadow-red-900/20 transition-all flex items-center justify-center gap-2 mt-4"
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="h-6 w-6 animate-spin" />
-                    Sending Alert...
-                  </>
-                ) : (
-                  <>
-                    <AlertTriangle className="h-6 w-6" />
-                    Send Alert Now
-                  </>
-                )}
-              </button>
-              <p className="text-center text-xs text-gray-500 flex items-center justify-center gap-1">
-                <ShieldAlert className="h-3 w-3" />
-                This will send a browser notification to all subscribed users
-              </p>
+      {/* Stats Row */}
+      <div className="grid grid-cols-2 md:grid-cols-4 
+        gap-4 mb-8">
+        {[
+          { label: 'Alerts Sent Today', value: totalSent, icon: '📤' },
+          { label: 'Districts Covered', value: '7', icon: '🗺️' },
+          { label: 'Active Subscribers', value: '1,243', icon: '👥' },
+          { label: 'Avg Response Time', value: '2.3s', icon: '⚡' }
+        ].map(stat => (
+          <div key={stat.label}
+            className="rounded-2xl p-4 text-center"
+            style={{backgroundColor: '#111827'}}>
+            <div className="text-2xl mb-1">{stat.icon}</div>
+            <div className="text-2xl font-bold text-white">
+              {stat.value}
+            </div>
+            <div className="text-xs text-gray-400 mt-1">
+              {stat.label}
             </div>
           </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+        {/* Control Panel */}
+        <div className="rounded-2xl p-6"
+          style={{backgroundColor: '#111827'}}>
+          <h2 className="text-xl font-bold text-white mb-6">
+            📡 Alert Control Panel
+          </h2>
+
+          {/* Alert Type */}
+          <div className="mb-5">
+            <label className="text-gray-400 text-sm 
+              font-medium block mb-2">
+              Alert Type
+            </label>
+            <select
+              value={selectedType.id}
+              onChange={e => handleTypeChange(e.target.value)}
+              className="w-full bg-gray-800 text-white 
+                border border-gray-600 rounded-xl 
+                px-4 py-3 text-sm
+                focus:outline-none focus:border-blue-500">
+              {ALERT_TYPES.map(t => (
+                <option key={t.id} value={t.id}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* District */}
+          <div className="mb-5">
+            <label className="text-gray-400 text-sm 
+              font-medium block mb-2">
+              Target District
+            </label>
+            <select
+              value={selectedDistrict}
+              onChange={e => setSelectedDistrict(e.target.value)}
+              className="w-full bg-gray-800 text-white 
+                border border-gray-600 rounded-xl 
+                px-4 py-3 text-sm
+                focus:outline-none focus:border-blue-500">
+              {DISTRICTS.map(d => (
+                <option key={d} value={d}>{d}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Message */}
+          <div className="mb-6">
+            <label className="text-gray-400 text-sm 
+              font-medium block mb-2">
+              Alert Message
+            </label>
+            <textarea
+              value={message}
+              onChange={e => setMessage(e.target.value)}
+              rows={4}
+              className="w-full bg-gray-800 text-white 
+                border border-gray-600 rounded-xl 
+                px-4 py-3 text-sm resize-none
+                focus:outline-none focus:border-blue-500
+                placeholder-gray-500"/>
+          </div>
+
+          {/* Preview box */}
+          <div className="mb-6 rounded-xl p-4 border
+            border-gray-600 bg-gray-800">
+            <p className="text-gray-400 text-xs mb-2">
+              NOTIFICATION PREVIEW
+            </p>
+            <p className="text-white text-sm font-bold">
+              {selectedType.label} — {selectedDistrict}
+            </p>
+            <p className="text-gray-300 text-xs mt-1">
+              {message.slice(0, 80)}...
+            </p>
+          </div>
+
+          {/* Send button */}
+          <button
+            onClick={sendAlert}
+            disabled={sending}
+            className="w-full py-4 rounded-xl font-bold
+              text-white text-lg
+              transition-all duration-200
+              flex items-center justify-center gap-3"
+            style={{
+              backgroundColor: sending 
+                ? '#374151' 
+                : '#DC2626'
+            }}>
+            {sending ? (
+              <>
+                <div className="w-5 h-5 border-2 
+                  border-white border-t-transparent 
+                  rounded-full animate-spin"/>
+                Sending Alert...
+              </>
+            ) : (
+              <>
+                🚨 Launch Alert Now
+              </>
+            )}
+          </button>
+          <p className="text-gray-500 text-xs 
+            text-center mt-3">
+            This will send a real browser notification 
+            to all subscribed users
+          </p>
         </div>
 
-        {/* Right Column - Feed & Stats */}
-        <div className="lg:col-span-2 space-y-6">
-          
-          {/* Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-cardBg border border-gray-800 rounded-xl p-4 flex flex-col items-center justify-center text-center">
-              <Activity className="h-6 w-6 text-blue-500 mb-2" />
-              <div className="text-2xl font-bold text-white">47</div>
-              <div className="text-xs text-gray-400 uppercase tracking-wider mt-1">Alerts Sent Today</div>
-            </div>
-            <div className="bg-cardBg border border-gray-800 rounded-xl p-4 flex flex-col items-center justify-center text-center">
-              <MapPin className="h-6 w-6 text-purple-500 mb-2" />
-              <div className="text-2xl font-bold text-white">7</div>
-              <div className="text-xs text-gray-400 uppercase tracking-wider mt-1">Districts Covered</div>
-            </div>
-            <div className="bg-cardBg border border-gray-800 rounded-xl p-4 flex flex-col items-center justify-center text-center">
-              <Users className="h-6 w-6 text-green-500 mb-2" />
-              <div className="text-2xl font-bold text-white">1,243</div>
-              <div className="text-xs text-gray-400 uppercase tracking-wider mt-1">Active Subscribers</div>
-            </div>
-            <div className="bg-cardBg border border-gray-800 rounded-xl p-4 flex flex-col items-center justify-center text-center">
-              <Clock className="h-6 w-6 text-orange-500 mb-2" />
-              <div className="text-2xl font-bold text-white">2.3s</div>
-              <div className="text-xs text-gray-400 uppercase tracking-wider mt-1">Avg Response Time</div>
-            </div>
-          </div>
-
-          {/* Feed */}
-          <div className="bg-cardBg border border-gray-800 rounded-xl p-6 shadow-xl h-[600px] flex flex-col">
-            <h2 className="text-xl font-semibold text-white mb-6 flex items-center gap-2">
-              <Activity className="h-5 w-5 text-blue-500" />
-              Recent Alerts Sent
-            </h2>
-
-            <div className="flex-1 overflow-y-auto pr-2 space-y-4">
-              {alerts.map((alert) => (
-                <div key={alert.id} className="bg-gray-900/50 border border-gray-800 rounded-lg p-4 hover:border-gray-700 transition-colors">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
-                    <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${getTypeColor(alert.type)}`}>
-                      {alert.type}
-                    </span>
-                    <span className="flex items-center gap-1 text-xs text-gray-500">
-                      <Clock className="h-3 w-3" />
-                      {alert.time}
-                    </span>
-                  </div>
-                  
-                  <div className="mb-3">
-                    <h3 className="text-white font-medium text-sm flex items-center gap-1 mb-1">
-                      <MapPin className="h-3.5 w-3.5 text-gray-400" />
-                      {alert.district}
-                    </h3>
-                    <p className="text-gray-400 text-sm">{alert.message}</p>
-                  </div>
-
-                  <div className="flex items-center gap-1.5 text-xs text-green-500 font-medium bg-green-900/20 w-fit px-2 py-1 rounded">
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                    {alert.status}
-                  </div>
+        {/* Alert Feed */}
+        <div className="rounded-2xl p-6"
+          style={{backgroundColor: '#111827'}}>
+          <h2 className="text-xl font-bold text-white mb-6">
+            📋 Live Alert Feed
+          </h2>
+          <div className="space-y-4 max-h-96 
+            overflow-y-auto pr-1">
+            {alerts.map(alert => (
+              <div key={alert.id}
+                className="rounded-xl p-4 border
+                  border-gray-700 bg-gray-800">
+                <div className="flex items-center 
+                  justify-between mb-2">
+                  <span className={`text-xs font-bold 
+                    px-2 py-1 rounded-full 
+                    ${alert.type.badge}`}>
+                    {alert.type.label}
+                  </span>
+                  <span className="text-green-400 
+                    text-xs font-medium">
+                    ✓ {alert.status}
+                  </span>
                 </div>
-              ))}
-            </div>
+                <p className="text-gray-300 text-sm mb-2">
+                  {alert.message.slice(0, 90)}...
+                </p>
+                <div className="flex justify-between 
+                  items-center">
+                  <div>
+                    <span className="text-blue-400 
+                      text-xs">
+                      📍 {alert.district}
+                    </span>
+                    <span className="text-gray-500 
+                      text-xs ml-3">
+                      👥 {alert.recipients.toLocaleString()} 
+                      notified
+                    </span>
+                  </div>
+                  <span className="text-gray-500 text-xs">
+                    {alert.time}
+                  </span>
+                </div>
+              </div>
+            ))}
           </div>
-
         </div>
       </div>
     </div>
-  );
+  )
 }
