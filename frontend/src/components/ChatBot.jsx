@@ -97,7 +97,7 @@ Wind Speed: ${liveData.windSpeed} km/h
             'Authorization': 'Bearer ' + groqKey
           },
           body: JSON.stringify({
-            model: 'llama-3.1-8b-instant',
+            model: 'meta-llama/llama-4-scout-17b-16e-instruct',
             max_tokens: 200,
             messages: [
               {
