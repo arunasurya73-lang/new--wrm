@@ -86,46 +86,35 @@ Wind Speed: ${liveData.windSpeed} km/h
 ` : 'Live data unavailable.'
 
     try {
-      const groqKey = import.meta.env.VITE_GROQ_API_KEY
-
       const res = await fetch(
-        'https://api.groq.com/openai/v1/chat/completions',
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${import.meta.env.VITE_GEMINI_API_KEY}`,
         {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + groqKey
+            'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            model: 'meta-llama/llama-4-scout-17b-16e-instruct',
-            max_tokens: 200,
-            messages: [
-              {
-                role: 'system',
-                content: 'You are AirBot, a helpful assistant for Delhi NCR air quality. Answer in 2 short sentences. Use emojis. Current AQI is ' + (liveData ? liveData.aqi : 'unknown') + '.'
-              },
-              {
-                role: 'user',
-                content: userMessage
-              }
-            ]
+            contents: [{
+              parts: [{
+                text: 'You are AirBot for Delhi AQI. Current AQI is ' + (liveData ? liveData.aqi : 'unknown') + '. Answer in 2 sentences with emojis. User asks: ' + userMessage
+              }]
+            }]
           })
         }
       )
 
-      const text = await res.text()
-      console.log('Raw response:', text)
-      const data = JSON.parse(text)
+      const data = await res.json()
+      const reply = data.candidates[0].content.parts[0].text
 
-      if (data.choices && data.choices[0]) {
+      if (reply) {
         setMessages(prev => [...prev, {
           role: 'assistant',
-          content: data.choices[0].message.content
+          content: reply
         }])
       } else if (data.error) {
         throw new Error(data.error.message)
       } else {
-        throw new Error('Unexpected response: ' + text)
+        throw new Error('Unexpected response')
       }
 
     } catch (err) {
