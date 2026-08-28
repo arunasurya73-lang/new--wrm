@@ -12,20 +12,23 @@ function FireMap({ fireLocations, windDirection, windSpeed }) {
     // Initialize map centered on North India, zoom level 7
     if (!mapInstance.current) {
       mapInstance.current = L.map(mapRef.current, {
-        center: [29.5, 76.5], // Center lat 29.5, lon 76.5
-        zoom: 7, // Zoom level 7 (shows Delhi, Punjab, and Haryana)
+        center: [28.5, 76.5],
+        zoom: 6,
         minZoom: 3,
         maxZoom: 14,
+        maxBounds: [[6, 68], [38, 98]],
+        maxBoundsViscosity: 1.0,
         zoomControl: true,
         scrollWheelZoom: false,
         attributionControl: true
       });
 
-      // Add CartoDB Dark Matter tiles with required attribution
+      // Add OpenStreetMap tiles with error fallback
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; OpenStreetMap contributors',
         subdomains: 'abcd',
-        maxZoom: 20
+        maxZoom: 18,
+        errorTileUrl: 'https://tile.openstreetmap.org/0/0/0.png'
       }).addTo(mapInstance.current);
 
       // Fetch and display GeoJSON for India state boundaries
