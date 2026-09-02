@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AirSense Delhi - Real-time AQI Forecast & Stubble Smoke Tracker</title>
+  <meta name="description" content="Next-generation Delhi NCR air quality index forecasting, real-time pollutant telemetry, satellite farm fire smoke tracking, and localized health advisories." />
+
+  <!-- Fonts & Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Leaflet Map CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+  <!-- Application Styles -->
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <!-- Ambient background glow elements -->
+  <div class="ambient-glow ambient-glow-1"></div>
+  <div class="ambient-glow ambient-glow-2"></div>
+
+  <!-- Toast Container -->
+  <div id="toast-container" class="toast-container" aria-live="polite"></div>
+
+  <div class="app-container">
+    <!-- Top Navbar -->
+    <header class="navbar" id="main-nav">
+      <div class="nav-brand">
+        <div class="brand-icon-wrap">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>
+            <path d="M11 13v4"/>
+            <path d="M15 11v6"/>
+          </svg>
+        </div>
+        <div>
+          <h1 class="brand-title">AirSense Delhi</h1>
+          <div class="brand-subtitle">
+            <span class="pulse-badge">
+              <span class="pulse-dot"></span>
+              LIVE TELEMETRY
+            </span>
+            <span>• Delhi NCR Network</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="nav-actions">
+        <!-- Station Quick Selector -->
+        <div class="station-dropdown-wrap">
+          <select id="station-select" aria-label="Select Monitoring Station">
+            <!-- Populated via JS -->
+          </select>
+        </div>
+
+        <!-- Action Pills -->
+        <button id="compare-btn" class="nav-action-pill" title="Compare Stations">
+          <span>⚡</span> Compare
+        </button>
+
+        <button id="alerts-btn" class="nav-action-pill" title="AQI Alert Settings">
+          <span>🔔</span> Alerts
+        </button>
+
+        <button id="export-btn" class="nav-action-pill" title="Export Clean Report">
+          <span>📥</span> Export
+        </button>
+
+        <!-- Refresh Data Button -->
+        <button id="refresh-btn" class="icon-btn" title="Refresh Live Data" aria-label="Refresh Data">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+            <path d="M3 3v5h5"/>
+            <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
+            <path d="M16 21h5v-5"/>
+          </svg>
+        </button>
+
+        <!-- Theme Selector Dropdown -->
+        <div class="station-dropdown-wrap">
+          <select id="theme-select" aria-label="Select UI Theme">
+            <option value="dark">🌑 Dark Glass</option>
+            <option value="light">☀️ Clean Light</option>
+            <option value="cyberpunk">⚡ Cyberpunk</option>
+            <option value="emerald">🌿 Bio Emerald</option>
+          </select>
+        </div>
+      </div>
+    </header>
+
+    <!-- Stubble Smoke Alert Banner -->
+    <div class="stubble-banner" id="stubble-banner">
+      <div class="stubble-info">
+        <div class="stubble-icon">🌾🔥</div>
+        <div class="stubble-text">
+          <h3>Stubble Burning Smoke Alert</h3>
+          <p id="stubble-alert-text">Prevailing North-Westerly winds (315° @ 6.2 km/h) are actively transporting agricultural biomass smoke plume into Delhi NCR basin.</p>
+        </div>
+      </div>
+      <div class="stubble-stat-box">
+        <div class="stubble-stat-num" id="stubble-pct-val">32%</div>
+        <div class="stubble-stat-lbl">Smoke Share in PM2.5</div>
+      </div>
+    </div>
+
+    <!-- 24-Hour Diurnal Timeline Scrubber & Simulation Bar -->
+    <div class="time-scrubber-card glass-card" id="timeline-scrubber">
+      <div class="scrubber-header">
+        <div class="scrubber-label-group">
+          <span class="scrubber-live-tag">TIMELINE PLAYER</span>
+          <span class="scrubber-time-display" id="scrubber-time-label">Current: Live Telemetry (22:00)</span>
+        </div>
+        <div class="scrubber-controls">
+          <button id="scrubber-play-btn" class="scrubber-btn">
+            <span id="play-icon">▶</span> Play 24h Loop
+          </button>
+          <button id="scrubber-reset-btn" class="scrubber-btn secondary">
+            Reset to Live
+          </button>
+        </div>
+      </div>
+      <div class="scrubber-slider-wrap">
+        <span class="scrubber-tick-label">00:00</span>
+        <input type="range" id="time-slider" min="0" max="23" value="22" step="1" class="time-range-slider" aria-label="24-Hour Diurnal Time Scrubber">
+        <span class="scrubber-tick-label">23:00</span>
+      </div>
+    </div>
+
+    <!-- Main Dashboard Grid -->
+    <main class="dashboard-grid" style="margin-top: 1.5rem;">
+      <!-- Left Column: Hero AQI & Health Advisory -->
+      <section class="glass-card hero-aqi-card" id="hero-aqi-section">
+        <div class="hero-station-header">
+          <div>
+            <h2 class="hero-station-name" id="selected-station-name">Anand Vihar, East Delhi</h2>
+            <div class="hero-update-time" id="last-updated-time">Updated: Just now</div>
+          </div>
+          <span class="pulse-badge" id="station-distance-badge">Primary Station</span>
+        </div>
+
+        <!-- Gauge Canvas & AQI Value -->
+        <div class="gauge-container">
+          <canvas id="aqi-gauge-canvas" width="280" height="200"></canvas>
+          <div class="gauge-center-text">
+            <span class="gauge-aqi-value" id="current-aqi-val">382</span>
+            <span class="gauge-status-badge" id="current-aqi-status" style="background: rgba(239, 68, 68, 0.2); color: #EF4444;">Severe</span>
+          </div>
+        </div>
+
+        <div class="aqi-desc-box" id="aqi-desc-text">
+          Respiratory effects likely on healthy people; serious impact on sensitive groups.
+        </div>
+
+        <!-- Health Guidance Grid -->
+        <div class="health-advisory-grid">
+          <div class="advisory-item">
+            <span class="advisory-icon">😷</span>
+            <div>
+              <div class="advisory-title">Mask Guidance</div>
+              <div class="advisory-status" id="adv-mask">N95 Required</div>
+            </div>
+          </div>
+          <div class="advisory-item">
+            <span class="advisory-icon">💨</span>
+            <div>
+              <div class="advisory-title">Air Purifier</div>
+              <div class="advisory-status" id="adv-purifier">Keep On (Max)</div>
+            </div>
+          </div>
+          <div class="advisory-item">
+            <span class="advisory-icon">🏃‍♂️</span>
+            <div>
+              <div class="advisory-title">Outdoor Exercise</div>
+              <div class="advisory-status" id="adv-exercise">Avoid Strenuous</div>
+            </div>
+          </div>
+          <div class="advisory-item">
+            <span class="advisory-icon">🪟</span>
+            <div>
+              <div class="advisory-title">Ventilation</div>
+              <div class="advisory-status" id="adv-windows">Close Windows</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Key Pollutants Telemetry -->
+        <div class="pollutant-grid">
+          <div class="pollutant-card">
+            <div class="pollutant-name">PM2.5</div>
+            <div class="pollutant-val" id="val-pm25" style="color: #EF4444;">295</div>
+            <div class="pollutant-unit">µg/m³ (5.9x Limit)</div>
+          </div>
+          <div class="pollutant-card">
+            <div class="pollutant-name">PM10</div>
+            <div class="pollutant-val" id="val-pm10" style="color: #F97316;">412</div>
+            <div class="pollutant-unit">µg/m³</div>
+          </div>
+          <div class="pollutant-card">
+            <div class="pollutant-name">NO₂</div>
+            <div class="pollutant-val" id="val-no2" style="color: #F59E0B;">68</div>
+            <div class="pollutant-unit">ppb</div>
+          </div>
+          <div class="pollutant-card">
+            <div class="pollutant-name">SO₂</div>
+            <div class="pollutant-val" id="val-so2" style="color: #10B981;">18</div>
+            <div class="pollutant-unit">ppb</div>
+          </div>
+          <div class="pollutant-card">
+            <div class="pollutant-name">CO</div>
+            <div class="pollutant-val" id="val-co" style="color: #F59E0B;">2.8</div>
+            <div class="pollutant-unit">mg/m³</div>
+          </div>
+          <div class="pollutant-card">
+            <div class="pollutant-name">O₃ (Ozone)</div>
+            <div class="pollutant-val" id="val-o3" style="color: #10B981;">24</div>
+            <div class="pollutant-unit">ppb</div>
+          </div>
+        </div>
+
+        <!-- Weather Telemetry Bar -->
+        <div class="weather-telemetry">
+          <div class="weather-box">
+            <span class="weather-lbl">Wind Flow</span>
+            <span class="weather-val" id="weather-wind">NW 6.2 km/h</span>
+          </div>
+          <div class="weather-box">
+            <span class="weather-lbl">Temp</span>
+            <span class="weather-val" id="weather-temp">24.5°C</span>
+          </div>
+          <div class="weather-box">
+            <span class="weather-lbl">Humidity</span>
+            <span class="weather-val" id="weather-humidity">68%</span>
+          </div>
+          <div class="weather-box">
+            <span class="weather-lbl">Visibility</span>
+            <span class="weather-val" id="weather-visibility">1.2 km</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right Column: Interactive Map & Plume Tracker -->
+      <section class="glass-card map-card" id="map-section">
+        <div class="map-header">
+          <div>
+            <h2 style="font-size: 1.25rem;">Spatial AQI & Satellite Plume Tracker</h2>
+            <p style="font-size: 0.8rem; color: var(--text-secondary);">Real-time multi-spectral sensor overlay with NASA FIRMS active fire hotspots</p>
+          </div>
+          <div class="pulse-badge" style="background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.3); color: #EF4444;">
+            <span class="pulse-dot" style="background-color: #EF4444; box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);"></span>
+            LIVE SATELLITE
+          </div>
+        </div>
+
+        <div class="map-container-wrap">
+          <div id="leaflet-map"></div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Analytics & Forecast Charts Section -->
+    <section class="charts-section">
+      <!-- 24-Hour Inversion & Trend Curve -->
+      <div class="glass-card">
+        <div class="chart-card-header">
+          <div>
+            <h3 style="font-size: 1.15rem;">24-Hour Diurnal Trend & Smoke Dispersion</h3>
+            <p style="font-size: 0.78rem; color: var(--text-secondary);">Hourly AQI progression and agricultural smoke fraction</p>
+          </div>
+        </div>
+        <div class="chart-wrapper">
+          <canvas id="chart-24h"></canvas>
+        </div>
+      </div>
+
+      <!-- 7-Day Forecast Outlook -->
+      <div class="glass-card">
+        <div class="chart-card-header">
+          <div>
+            <h3 style="font-size: 1.15rem;">7-Day Weather & AQI Forecast</h3>
+            <p style="font-size: 0.78rem; color: var(--text-secondary);">Projected air quality based on meteorological models</p>
+          </div>
+        </div>
+        <div class="chart-wrapper">
+          <canvas id="chart-7d"></canvas>
+        </div>
+      </div>
+
+      <!-- Pollutant Severity Fingerprint Radar -->
+      <div class="glass-card">
+        <div class="chart-card-header">
+          <div>
+            <h3 style="font-size: 1.15rem;">Pollutant Severity Fingerprint</h3>
+            <p style="font-size: 0.78rem; color: var(--text-secondary);">Multi-pollutant ratios vs WHO Safety Standard</p>
+          </div>
+        </div>
+        <div class="chart-wrapper">
+          <canvas id="chart-radar"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- Delhi NCR Station Leaderboard Table -->
+    <section class="glass-card table-section">
+      <div class="table-header-row">
+        <div>
+          <h3 style="font-size: 1.15rem;">Delhi NCR Monitoring Station Registry</h3>
+          <p style="font-size: 0.78rem; color: var(--text-secondary);">Real-time telemetry across Central, East, West, South, and NCR zones</p>
+        </div>
+        <div class="search-input-wrap">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="station-search-input" placeholder="Search station (e.g. ITO, Dwarka)..." aria-label="Search station">
+        </div>
+      </div>
+
+      <div class="stations-table-wrap">
+        <table class="stations-table" id="stations-table">
+          <thead>
+            <tr>
+              <th>Station Location</th>
+              <th>AQI Index</th>
+              <th>PM2.5</th>
+              <th>PM10</th>
+              <th>Smoke Share</th>
+              <th>Wind Vector</th>
+              <th>Temperature</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="stations-table-body">
+            <!-- Dynamically populated -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+      <div>
+        <strong>AirSense Delhi</strong> &bull; Open Environmental Data & Stubble Dispersion Intelligence
+      </div>
+      <div class="footer-links">
+        <a href="#hero-aqi-section" class="footer-link">Live Telemetry</a>
+        <a href="#map-section" class="footer-link">Interactive Map</a>
+        <a href="https://cpcb.nic.in" target="_blank" rel="noopener noreferrer" class="footer-link">CPCB Data Source</a>
+      </div>
+    </footer>
+  </div>
+
+  <!-- Comparison Modal -->
+  <div class="modal-backdrop" id="compare-modal" role="dialog" aria-modal="true" style="display: none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <span class="modal-badge">DUAL ANALYSIS</span>
+          <h2>Station Comparison</h2>
+        </div>
+        <button class="modal-close-btn" id="close-compare-modal">&times;</button>
+      </div>
+      <div class="compare-selector-row">
+        <div class="compare-select-box">
+          <label for="compare-station-1">Station 1</label>
+          <select id="compare-station-1"></select>
+        </div>
+        <div class="compare-vs-badge">VS</div>
+        <div class="compare-select-box">
+          <label for="compare-station-2">Station 2</label>
+          <select id="compare-station-2"></select>
+        </div>
+      </div>
+      <div class="compare-grid" id="compare-content">
+        <!-- Rendered dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <!-- AQI Alert Modal -->
+  <div class="modal-backdrop" id="alert-modal" role="dialog" aria-modal="true" style="display: none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <span class="modal-badge">EARLY WARNING</span>
+          <h2>AQI Threshold Alerts</h2>
+        </div>
+        <button class="modal-close-btn" id="close-alert-modal">&times;</button>
+      </div>
+      <div class="alert-config-body">
+        <p class="alert-desc">Configure automated browser and in-app alerts when air quality exceeds safe physiological thresholds.</p>
+        
+        <div class="config-row">
+          <label for="alert-threshold-input">AQI Alert Threshold</label>
+          <select id="alert-threshold-input">
+            <option value="200">200+ (Poor & Above)</option>
+            <option value="300" selected>300+ (Severe & Above)</option>
+            <option value="400">400+ (Hazardous Emergency)</option>
+          </select>
+        </div>
+
+        <div class="config-toggle-row">
+          <div>
+            <strong>Browser Notifications</strong>
+            <p>Push alerts when AQI spikes above threshold</p>
+          </div>
+          <input type="checkbox" id="browser-notify-toggle" class="toggle-checkbox" checked>
+        </div>
+
+        <div class="alert-modal-actions">
+          <button id="test-alert-btn" class="modal-btn secondary">Test Sound & Toast</button>
+          <button id="save-alert-btn" class="modal-btn primary">Save Preferences</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Application Logic -->
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

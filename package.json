@@ -1,0 +1,21 @@
+{
+  "name": "airsense-delhi",
+  "version": "1.0.0",
+  "description": "Next-generation Delhi NCR air quality index forecasting, real-time pollutant telemetry, satellite farm fire smoke tracking, and localized health advisories.",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [
+    "air-quality",
+    "aqi",
+    "delhi",
+    "stubble-burning",
+    "leaflet",
+    "chartjs",
+    "weather"
+  ],
+  "author": "AirSense Team",
+  "license": "MIT"
+}
