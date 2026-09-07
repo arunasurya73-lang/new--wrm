@@ -144,7 +144,13 @@
             <h2 class="hero-station-name" id="selected-station-name">Anand Vihar, East Delhi</h2>
             <div class="hero-update-time" id="last-updated-time">Updated: Just now</div>
           </div>
-          <span class="pulse-badge" id="station-distance-badge">Primary Station</span>
+          <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+            <div id="weather-reactive-chip" class="weather-reactive-badge" title="Live Open-Meteo Weather Condition">
+              <span class="weather-icon">⛅</span>
+              <span class="weather-text">Moderate Cloudy</span>
+            </div>
+            <span class="pulse-badge" id="station-distance-badge">Primary Station</span>
+          </div>
         </div>
 
         <!-- Gauge Canvas & AQI Value -->

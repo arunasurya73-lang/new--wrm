@@ -2,12 +2,16 @@ import { STATIONS, getAQIInfo, AQI_LEVELS } from './assets/js/stationData.js';
 import { AQIGauge } from './assets/js/aqiGauge.js';
 import { MapTracker } from './assets/js/mapTracker.js';
 import { ForecastCharts } from './assets/js/charts.js';
+import { fetchLiveWeather, mapWeatherToVisualState, getWeatherStateMetadata } from './assets/js/weatherService.js';
 
 class AirSenseApp {
   constructor() {
     this.stations = [...STATIONS];
     this.currentStationId = 'anand-vihar';
     this.currentRegionFilter = 'all';
+    this.currentTheme = localStorage.getItem('airsense_theme') || 'dark';
+    this.currentWeatherState = 'moderate-cloudy';
+    
     this.gauge = null;
     this.map = null;
     this.charts = null;
@@ -37,6 +41,9 @@ class AirSenseApp {
     this.renderStationData(this.currentStationId);
     this.renderStationsTable();
     this.checkThresholdAlerts();
+    
+    // Initial weather-reactive update for Clean Light theme
+    await this.updateWeatherReactiveTheme();
   }
 
   // ==========================================
@@ -59,14 +66,15 @@ class AirSenseApp {
   }
 
   // ==========================================
-  // Theme Management
+  // Weather-Reactive Theme Management
   // ==========================================
   setupTheme() {
     const savedTheme = localStorage.getItem('airsense_theme') || 'dark';
     this.setTheme(savedTheme);
   }
 
-  setTheme(themeName) {
+  async setTheme(themeName) {
+    this.currentTheme = themeName;
     document.documentElement.classList.remove('dark', 'light', 'cyberpunk', 'emerald');
     document.documentElement.classList.add(themeName);
     localStorage.setItem('airsense_theme', themeName);
@@ -81,6 +89,43 @@ class AirSenseApp {
       if (station) this.charts.updateCharts(station);
     }
     if (this.gauge) this.gauge.draw();
+
+    // Trigger weather reactive adaptation for Clean Light theme
+    await this.updateWeatherReactiveTheme();
+  }
+
+  async updateWeatherReactiveTheme(stationOverride = null) {
+    const station = stationOverride || this.stations.find(s => s.id === this.currentStationId);
+    if (!station) return;
+
+    // Fetch live weather data (with 15-minute caching)
+    const weather = await fetchLiveWeather(station.lat, station.lng);
+    const visualState = mapWeatherToVisualState(weather);
+    this.currentWeatherState = visualState;
+    const meta = getWeatherStateMetadata(visualState, weather);
+
+    // Weather classes to toggle
+    const weatherClasses = ['weather-clear', 'weather-moderate-cloudy', 'weather-overcast', 'weather-rain', 'weather-night'];
+
+    if (this.currentTheme === 'light') {
+      document.documentElement.setAttribute('data-weather', visualState);
+      weatherClasses.forEach(c => document.documentElement.classList.remove(c));
+      document.documentElement.classList.add(`weather-${visualState}`);
+
+      const chip = document.getElementById('weather-reactive-chip');
+      if (chip) {
+        chip.style.display = 'inline-flex';
+        chip.innerHTML = `<span class="weather-icon">${meta.icon}</span><span class="weather-text">${meta.label}</span>`;
+        chip.title = `Live Weather Ambiance for ${station.name}: ${meta.description}`;
+      }
+    } else {
+      document.documentElement.removeAttribute('data-weather');
+      weatherClasses.forEach(c => document.documentElement.classList.remove(c));
+      const chip = document.getElementById('weather-reactive-chip');
+      if (chip) {
+        chip.style.display = 'none';
+      }
+    }
   }
 
   // ==========================================
@@ -562,7 +607,7 @@ class AirSenseApp {
   // ==========================================
   // Station Selection & Telemetry Rendering
   // ==========================================
-  selectStation(stationId) {
+  async selectStation(stationId) {
     this.currentStationId = stationId;
 
     const select = document.getElementById('station-select');
@@ -571,6 +616,9 @@ class AirSenseApp {
     this.renderStationData(stationId);
     if (this.map) this.map.focusStation(stationId);
     this.checkThresholdAlerts();
+    
+    // Dynamically adapt Clean Light theme to this station's live weather
+    await this.updateWeatherReactiveTheme();
   }
 
   renderStationData(stationId, overrideData = null) {
@@ -731,7 +779,7 @@ class AirSenseApp {
     });
   }
 
-  refreshLiveData() {
+  async refreshLiveData() {
     this.stations.forEach(s => {
       const delta = Math.floor(Math.random() * 7) - 3;
       s.aqi = Math.max(20, Math.min(490, s.aqi + delta));
@@ -742,7 +790,11 @@ class AirSenseApp {
     this.renderStationData(this.currentStationId);
     this.renderStationsTable();
     if (this.map) this.map.renderStations();
-    this.showToast('Telemetry Updated', 'Refreshed sensor metrics across all stations', 'info');
+    
+    // Live weather refresh for active location
+    await this.updateWeatherReactiveTheme();
+    
+    this.showToast('Telemetry Updated', 'Refreshed sensor metrics & live weather reactive theme', 'info');
   }
 }
 
