@@ -576,7 +576,7 @@ h1, h2, h3, h4, .font-heading {
   pointer-events: none;
 }
 
-.map-view-toggle-group, .map-toggle-group {
+.map-scope-group, .map-view-toggle-group, .map-toggle-group {
   display: flex;
   gap: 0.4rem;
   background: rgba(15, 23, 42, 0.85);
@@ -587,6 +587,11 @@ h1, h2, h3, h4, .font-heading {
   border: 1px solid var(--border-color);
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
   pointer-events: auto;
+}
+
+.pin-flag {
+  margin-right: 4px;
+  font-size: 0.85rem;
 }
 
 .map-mode-btn {
@@ -899,7 +904,57 @@ h1, h2, h3, h4, .font-heading {
   align-items: center;
   margin-bottom: 1.25rem;
   flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.table-actions-group {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 0.75rem;
+}
+
+.region-filter-tabs {
+  display: flex;
+  gap: 0.35rem;
+  background: var(--bg-input);
+  padding: 4px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+}
+
+.region-tab-btn {
+  background: transparent;
+  color: var(--text-secondary);
+  border: none;
+  padding: 0.4rem 0.85rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.region-tab-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.region-tab-btn.active {
+  background: var(--accent-blue);
+  color: #FFFFFF;
+  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.35);
+}
+
+.table-region-tag {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
 }
 
 .search-input-wrap {

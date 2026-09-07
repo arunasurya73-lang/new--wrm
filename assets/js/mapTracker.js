@@ -9,8 +9,10 @@ export class MapTracker {
     this.smokeLayer = null;
     this.hotspotLayer = null;
     this.heatHaloLayer = null;
-    this.windParticleLayer = null;
+    this.windCanvas = null;
     this.currentBaseLayerType = 'satellite'; // 'satellite' | 'dark' | 'streets'
+    this.currentScope = 'world'; // 'world' | 'india' | 'delhi'
+    
     this.showSmoke = true;
     this.showHotspots = true;
     this.showWindFlow = true;
@@ -29,18 +31,19 @@ export class MapTracker {
       return;
     }
 
-    // Centered over Delhi NCR with broad view of Northern agricultural corridors
+    // Centered initially with World / Global View with unrestricted pan & zoom
     this.map = L.map(this.containerId, {
-      center: [28.6600, 77.1600],
-      zoom: 10,
-      minZoom: 7,
+      center: [22.0000, 20.0000],
+      zoom: 3,
+      minZoom: 2,
       maxZoom: 18,
+      worldCopyJump: true,
       zoomControl: false
     });
 
     L.control.zoom({ position: 'bottomright' }).addTo(this.map);
 
-    // High-Resolution Basemaps
+    // High-Resolution World Basemaps
     this.baseLayers = {
       satellite: L.tileLayer(
         'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
@@ -65,13 +68,13 @@ export class MapTracker {
       )
     };
 
-    // Satellite overlay labels for city and highway names
+    // Satellite overlay labels for city, country and borders
     this.satelliteLabels = L.tileLayer(
       'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
       { maxZoom: 18 }
     );
 
-    // Initial basemap: High-Res Satellite View
+    // Initial basemap: High-Res World Satellite View
     this.baseLayers[this.currentBaseLayerType].addTo(this.map);
     if (this.currentBaseLayerType === 'satellite') {
       this.satelliteLabels.addTo(this.map);
@@ -86,12 +89,23 @@ export class MapTracker {
   }
 
   // ==========================================
-  // Custom Floating Layer Switcher
+  // Custom Floating Layer Switcher & Scope Bar
   // ==========================================
   initCustomLayerControls() {
     const controlsContainer = document.createElement('div');
     controlsContainer.className = 'map-floating-bar';
     controlsContainer.innerHTML = `
+      <div class="map-scope-group">
+        <button id="map-scope-world" class="map-mode-btn ${this.currentScope === 'world' ? 'active' : ''}" title="Global World Map View">
+          <span>🌍</span> World
+        </button>
+        <button id="map-scope-india" class="map-mode-btn ${this.currentScope === 'india' ? 'active' : ''}" title="India Regional Overview">
+          <span>🇮🇳</span> India
+        </button>
+        <button id="map-scope-delhi" class="map-mode-btn ${this.currentScope === 'delhi' ? 'active' : ''}" title="Delhi NCR Telemetry Network">
+          <span>📍</span> Delhi NCR
+        </button>
+      </div>
       <div class="map-view-toggle-group">
         <button id="map-mode-satellite" class="map-mode-btn ${this.currentBaseLayerType === 'satellite' ? 'active' : ''}" title="Realistic HD Satellite Imagery">
           <span>🛰️</span> Satellite
@@ -102,12 +116,12 @@ export class MapTracker {
       </div>
       <div class="map-toggle-group">
         <button id="map-layer-wind" class="map-mode-btn ${this.showWindFlow ? 'active' : ''}" title="Live Animated Wind Vectors">
-          <span>💨</span> Wind Flow
+          <span>💨</span> Wind
         </button>
-        <button id="map-layer-plume" class="map-mode-btn ${this.showSmoke ? 'active' : ''}" title="Atmospheric Smoke Plume">
+        <button id="map-layer-plume" class="map-mode-btn ${this.showSmoke ? 'active' : ''}" title="Biomass Smoke Dispersion Plume">
           <span>🌾</span> Smoke
         </button>
-        <button id="map-layer-fires" class="map-mode-btn ${this.showHotspots ? 'active' : ''}" title="NASA Satellite Thermal Anomalies">
+        <button id="map-layer-fires" class="map-mode-btn ${this.showHotspots ? 'active' : ''}" title="NASA Global Satellite Thermal Fires">
           <span>🔥</span> Fires
         </button>
       </div>
@@ -116,6 +130,11 @@ export class MapTracker {
     const mapWrap = document.querySelector('.map-container-wrap');
     if (mapWrap) {
       mapWrap.appendChild(controlsContainer);
+
+      // Event Listeners for Scope Switchers
+      document.getElementById('map-scope-world')?.addEventListener('click', () => this.setScope('world'));
+      document.getElementById('map-scope-india')?.addEventListener('click', () => this.setScope('india'));
+      document.getElementById('map-scope-delhi')?.addEventListener('click', () => this.setScope('delhi'));
 
       // Event Listeners for Layer Toggles
       document.getElementById('map-mode-satellite')?.addEventListener('click', () => this.switchBaseMap('satellite'));
@@ -135,6 +154,21 @@ export class MapTracker {
         e.currentTarget.classList.toggle('active', this.showHotspots);
         this.toggleHotspotLayer(this.showHotspots);
       });
+    }
+  }
+
+  setScope(scope) {
+    this.currentScope = scope;
+    ['world', 'india', 'delhi'].forEach(s => {
+      document.getElementById(`map-scope-${s}`)?.classList.toggle('active', s === scope);
+    });
+
+    if (scope === 'world') {
+      this.map.flyTo([22.0, 20.0], 3, { duration: 1.5 });
+    } else if (scope === 'india') {
+      this.map.flyTo([22.5, 78.9], 5, { duration: 1.2 });
+    } else if (scope === 'delhi') {
+      this.map.flyTo([28.66, 77.16], 10, { duration: 1.2 });
     }
   }
 
@@ -168,14 +202,15 @@ export class MapTracker {
 
     STATIONS.forEach(station => {
       const info = getAQIInfo(station.aqi);
-      const radiusMeters = Math.max(3000, Math.min(8500, station.aqi * 20));
+      const isGlobal = station.region === 'Global';
+      const radiusMeters = isGlobal ? Math.max(30000, station.aqi * 450) : Math.max(4000, Math.min(9000, station.aqi * 22));
 
-      // Concentric atmospheric dispersion gradient circles
+      // Atmospheric dispersion halo
       const outerHalo = L.circle([station.lat, station.lng], {
         radius: radiusMeters,
         color: 'transparent',
         fillColor: info.color,
-        fillOpacity: 0.12,
+        fillOpacity: 0.14,
         interactive: false
       });
 
@@ -183,7 +218,7 @@ export class MapTracker {
         radius: radiusMeters * 0.45,
         color: 'transparent',
         fillColor: info.color,
-        fillOpacity: 0.25,
+        fillOpacity: 0.28,
         interactive: false
       });
 
@@ -205,6 +240,7 @@ export class MapTracker {
 
     STATIONS.forEach(station => {
       const info = getAQIInfo(station.aqi);
+      const flagStr = station.flag ? `<span class="pin-flag">${station.flag}</span>` : '';
       
       const customIcon = L.divIcon({
         className: 'custom-station-pin',
@@ -212,13 +248,14 @@ export class MapTracker {
           <div class="station-pin-wrap" style="--pin-color: ${info.color}; --pin-glow: ${info.bgGlow};">
             <div class="station-pin-pulse"></div>
             <div class="station-pin-badge">
+              ${flagStr}
               <span class="pin-value">${station.aqi}</span>
             </div>
             <div class="station-pin-arrow"></div>
           </div>
         `,
-        iconSize: [44, 44],
-        iconAnchor: [22, 40]
+        iconSize: [48, 48],
+        iconAnchor: [24, 42]
       });
 
       const marker = L.marker([station.lat, station.lng], { icon: customIcon }).addTo(this.map);
@@ -226,7 +263,12 @@ export class MapTracker {
       const popupHtml = `
         <div class="map-popup-card">
           <div class="popup-header">
-            <h4>${station.name}</h4>
+            <div>
+              <div style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em;">
+                ${station.flag || '📍'} ${station.city}, ${station.country}
+              </div>
+              <h4 style="margin: 2px 0 0 0; font-size: 0.95rem;">${station.name}</h4>
+            </div>
             <span class="popup-badge" style="background: ${info.color}; color: #fff;">${info.label}</span>
           </div>
           <div class="popup-aqi-row">
@@ -252,7 +294,7 @@ export class MapTracker {
         </div>
       `;
 
-      marker.bindPopup(popupHtml, { maxWidth: 320, className: 'airsense-custom-popup' });
+      marker.bindPopup(popupHtml, { maxWidth: 330, className: 'airsense-custom-popup' });
 
       marker.on('popupopen', () => {
         const btn = document.querySelector(`.popup-select-btn[data-station-id="${station.id}"]`);
@@ -275,7 +317,7 @@ export class MapTracker {
     if (this.smokeLayer) this.smokeLayer.remove();
     this.smokeLayer = L.layerGroup();
 
-    // 1. Primary Inversion Dispersion Envelope
+    // 1. Primary Inversion Dispersion Envelope (Indo-Gangetic Basin)
     const outerPlume = L.polygon([
       [31.20, 74.80],
       [31.40, 76.50],
@@ -319,7 +361,7 @@ export class MapTracker {
   }
 
   // ==========================================
-  // Realistic Satellite Farm Fire Hotspots
+  // Realistic Global & Regional Fire Hotspots
   // ==========================================
   renderRealisticHotspots() {
     if (this.hotspotLayer) this.hotspotLayer.remove();
@@ -343,6 +385,7 @@ export class MapTracker {
         <div style="font-family:'Inter', sans-serif;">
           <strong style="color: #EF4444;">🛰️ NASA FIRMS Thermal Anomaly</strong><br>
           <b>Location:</b> ${fire.region}<br>
+          <b>Classification:</b> ${fire.type || 'Biomass Fire'}<br>
           <b>Intensity:</b> ${fire.intensity}
         </div>
       `, { direction: 'top', className: 'airsense-custom-tooltip' });
@@ -380,8 +423,8 @@ export class MapTracker {
     this.map.on('move resize zoom', resizeCanvas);
     resizeCanvas();
 
-    // Generate 120 streaming wind particles
-    const particleCount = 120;
+    // Generate streaming wind particles
+    const particleCount = 140;
     this.windParticles = [];
     for (let i = 0; i < particleCount; i++) {
       this.windParticles.push(this.createRandomParticle());
@@ -395,7 +438,7 @@ export class MapTracker {
     return {
       x: Math.random() * size.x,
       y: Math.random() * size.y,
-      length: Math.random() * 14 + 10,
+      length: Math.random() * 16 + 10,
       speed: Math.random() * 1.8 + 1.2,
       opacity: Math.random() * 0.7 + 0.2,
       age: Math.random() * 100
@@ -410,7 +453,7 @@ export class MapTracker {
     if (this.showWindFlow) {
       ctx.clearRect(0, 0, size.x, size.y);
 
-      // Wind vector: NW (315°) towards SE (135°)
+      // Atmospheric vector flow: NW towards SE
       const angle = (135 * Math.PI) / 180;
       const vx = Math.cos(angle);
       const vy = Math.sin(angle);
@@ -464,7 +507,8 @@ export class MapTracker {
   focusStation(stationId) {
     const station = STATIONS.find(s => s.id === stationId);
     if (station && this.map) {
-      this.map.flyTo([station.lat, station.lng], 13, { duration: 1.2 });
+      const zoomLevel = station.region === 'Global' ? 11 : 13;
+      this.map.flyTo([station.lat, station.lng], zoomLevel, { duration: 1.2 });
     }
   }
 }

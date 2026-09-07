@@ -7,6 +7,7 @@ class AirSenseApp {
   constructor() {
     this.stations = [...STATIONS];
     this.currentStationId = 'anand-vihar';
+    this.currentRegionFilter = 'all';
     this.gauge = null;
     this.map = null;
     this.charts = null;
@@ -48,7 +49,8 @@ class AirSenseApp {
         const data = await res.json();
         if (data && data.stations && data.stations.length > 0) {
           this.stations = data.stations;
-          this.showToast('Live Telemetry Synced', 'Successfully received telemetry from Delhi NCR network', 'info');
+          this.populateStationDropdown();
+          this.showToast('Live Telemetry Synced', 'Successfully received telemetry from Global & Delhi NCR network', 'info');
         }
       }
     } catch (e) {
@@ -88,12 +90,30 @@ class AirSenseApp {
     const select = document.getElementById('station-select');
     if (!select) return;
     select.innerHTML = '';
-    this.stations.forEach(station => {
-      const opt = document.createElement('option');
-      opt.value = station.id;
-      opt.textContent = `${station.name} (AQI ${station.aqi})`;
-      select.appendChild(opt);
+
+    const groups = [
+      { label: '📍 Delhi NCR (20 Zones)', region: 'Delhi NCR' },
+      { label: '🇮🇳 India Metros', region: 'India' },
+      { label: '🌍 Global World Cities', region: 'Global' }
+    ];
+
+    groups.forEach(g => {
+      const optGroup = document.createElement('optgroup');
+      optGroup.label = g.label;
+      const filtered = this.stations.filter(s => s.region === g.region);
+      
+      filtered.forEach(station => {
+        const opt = document.createElement('option');
+        opt.value = station.id;
+        opt.textContent = `${station.flag || '📍'} ${station.name} (AQI ${station.aqi})`;
+        optGroup.appendChild(opt);
+      });
+
+      if (filtered.length > 0) {
+        select.appendChild(optGroup);
+      }
     });
+
     select.value = this.currentStationId;
   }
 
@@ -140,11 +160,23 @@ class AirSenseApp {
       });
     }
 
+    // Region filter tabs in table
+    const regionTabs = document.querySelectorAll('.region-tab-btn');
+    regionTabs.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        regionTabs.forEach(b => b.classList.remove('active'));
+        e.currentTarget.classList.add('active');
+        this.currentRegionFilter = e.currentTarget.getAttribute('data-region');
+        const searchVal = document.getElementById('station-search-input')?.value || '';
+        this.renderStationsTable(searchVal);
+      });
+    });
+
     // Search Station Table
     const searchInput = document.getElementById('station-search-input');
     if (searchInput) {
       searchInput.addEventListener('input', (e) => {
-        this.filterStationsTable(e.target.value);
+        this.renderStationsTable(e.target.value);
       });
     }
 
@@ -189,17 +221,23 @@ class AirSenseApp {
 
     // Alerts Button & Modal
     const alertsBtn = document.getElementById('alerts-btn');
-    const alertModal = document.getElementById('alert-modal');
-    const closeAlertBtn = document.getElementById('close-alert-modal');
-    const saveAlertBtn = document.getElementById('save-alert-btn');
-    const testAlertBtn = document.getElementById('test-alert-btn');
-    const threshInput = document.getElementById('alert-threshold-input');
-    const notifyToggle = document.getElementById('browser-notify-toggle');
+    const alertModal = document.getElementById('alerts-modal');
+    const closeAlertBtn = document.getElementById('close-alerts-modal');
+    const saveAlertBtn = document.getElementById('save-alerts-btn');
+    const threshSlider = document.getElementById('alert-threshold-slider');
+    const threshLbl = document.getElementById('threshold-val-lbl');
+
+    if (threshSlider && threshLbl) {
+      threshSlider.value = this.alertThreshold;
+      threshLbl.textContent = `${this.alertThreshold} (${getAQIInfo(this.alertThreshold).label})`;
+      threshSlider.addEventListener('input', (e) => {
+        const val = parseInt(e.target.value, 10);
+        threshLbl.textContent = `${val} (${getAQIInfo(val).label})`;
+      });
+    }
 
     if (alertsBtn && alertModal) {
       alertsBtn.addEventListener('click', () => {
-        if (threshInput) threshInput.value = this.alertThreshold;
-        if (notifyToggle) notifyToggle.checked = this.browserNotifyEnabled;
         alertModal.style.display = 'flex';
       });
     }
@@ -212,10 +250,11 @@ class AirSenseApp {
 
     if (saveAlertBtn && alertModal) {
       saveAlertBtn.addEventListener('click', () => {
-        if (threshInput) {
-          this.alertThreshold = parseInt(threshInput.value, 10);
+        if (threshSlider) {
+          this.alertThreshold = parseInt(threshSlider.value, 10);
           localStorage.setItem('airsense_alert_thresh', this.alertThreshold);
         }
+        const notifyToggle = document.getElementById('toggle-desktop-notify');
         if (notifyToggle) {
           this.browserNotifyEnabled = notifyToggle.checked;
           localStorage.setItem('airsense_browser_notify', this.browserNotifyEnabled);
@@ -226,14 +265,6 @@ class AirSenseApp {
         alertModal.style.display = 'none';
         this.showToast('Settings Saved', `AQI threshold set to ${this.alertThreshold}+`, 'success');
         this.checkThresholdAlerts();
-      });
-    }
-
-    if (testAlertBtn) {
-      testAlertBtn.addEventListener('click', () => {
-        this.playAlertChime();
-        this.showToast('⚠️ AQI Emergency Alert', 'Anand Vihar reached AQI 382 (Severe). Mask required!', 'severe');
-        this.dispatchBrowserNotification('AirSense AQI Warning', 'Severe air pollution detected in Anand Vihar: AQI 382.');
       });
     }
 
@@ -251,8 +282,8 @@ class AirSenseApp {
     const scrubberResetBtn = document.getElementById('scrubber-reset-btn');
 
     if (timeSlider) {
-      timeSlider.value = this.scrubberHour;
       timeSlider.addEventListener('input', (e) => {
+        this.stopScrubberPlayback();
         const hour = parseInt(e.target.value, 10);
         this.simulateDiurnalHour(hour);
       });
@@ -270,31 +301,36 @@ class AirSenseApp {
         const nowHour = new Date().getHours();
         if (timeSlider) timeSlider.value = nowHour;
         this.simulateDiurnalHour(nowHour, true);
+        this.showToast('Live Mode', 'Reset scrubber to live telemetry', 'info');
       });
     }
   }
 
-  // ==========================================
-  // Station Comparison Logic
-  // ==========================================
   populateCompareSelectors() {
     const s1 = document.getElementById('compare-station-1');
     const s2 = document.getElementById('compare-station-2');
     if (!s1 || !s2) return;
 
-    s1.innerHTML = '';
-    s2.innerHTML = '';
+    [s1, s2].forEach(select => {
+      select.innerHTML = '';
+      const groups = [
+        { label: '📍 Delhi NCR', region: 'Delhi NCR' },
+        { label: '🇮🇳 India Metros', region: 'India' },
+        { label: '🌍 Global World Cities', region: 'Global' }
+      ];
 
-    this.stations.forEach(s => {
-      const o1 = document.createElement('option');
-      o1.value = s.id;
-      o1.textContent = s.name;
-      s1.appendChild(o1);
-
-      const o2 = document.createElement('option');
-      o2.value = s.id;
-      o2.textContent = s.name;
-      s2.appendChild(o2);
+      groups.forEach(g => {
+        const optGroup = document.createElement('optgroup');
+        optGroup.label = g.label;
+        const filtered = this.stations.filter(s => s.region === g.region);
+        filtered.forEach(st => {
+          const opt = document.createElement('option');
+          opt.value = st.id;
+          opt.textContent = `${st.flag || '📍'} ${st.name} (AQI ${st.aqi})`;
+          optGroup.appendChild(opt);
+        });
+        if (filtered.length > 0) select.appendChild(optGroup);
+      });
     });
 
     s1.value = this.currentStationId;
@@ -304,7 +340,7 @@ class AirSenseApp {
   renderCompareView() {
     const s1Id = document.getElementById('compare-station-1')?.value;
     const s2Id = document.getElementById('compare-station-2')?.value;
-    const container = document.getElementById('compare-content');
+    const container = document.getElementById('compare-metrics-container');
     if (!container) return;
 
     const st1 = this.stations.find(s => s.id === s1Id) || this.stations[0];
@@ -319,31 +355,37 @@ class AirSenseApp {
     container.innerHTML = `
       <div class="compare-card">
         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
-          <h3 style="color: ${info1.color}; font-size: 1.15rem;">${st1.name}</h3>
-          <span class="table-aqi-pill" style="background: ${info1.color}; font-size: 0.9rem;">AQI ${st1.aqi}</span>
+          <div>
+            <span style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase;">${st1.region}</span>
+            <h3 style="color: ${info1.color}; font-size: 1.1rem; margin: 2px 0 0 0;">${st1.flag || ''} ${st1.name}</h3>
+          </div>
+          <span class="table-aqi-pill" style="background: ${info1.color}; font-size: 0.85rem;">AQI ${st1.aqi}</span>
         </div>
         <p style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 1rem;">${info1.label} - ${info1.desc}</p>
         <div class="compare-metric-row"><span class="compare-metric-lbl">PM2.5 Concentration</span><span class="compare-metric-val" style="color:${info1.color}">${st1.pm25} µg/m³</span></div>
         <div class="compare-metric-row"><span class="compare-metric-lbl">PM10 Concentration</span><span class="compare-metric-val">${st1.pm10} µg/m³</span></div>
-        <div class="compare-metric-row"><span class="compare-metric-lbl">Stubble Smoke Share</span><span class="compare-metric-val" style="color: #EF4444">${st1.stubbleShare}%</span></div>
+        <div class="compare-metric-row"><span class="compare-metric-lbl">Biomass Smoke Share</span><span class="compare-metric-val" style="color: #EF4444">${st1.stubbleShare}%</span></div>
         <div class="compare-metric-row"><span class="compare-metric-lbl">Wind Flow</span><span class="compare-metric-val">${st1.wind.direction} @ ${st1.wind.speed} km/h</span></div>
         <div class="compare-metric-row"><span class="compare-metric-lbl">Ambient Temp</span><span class="compare-metric-val">${st1.temp}°C (${st1.humidity}% RH)</span></div>
       </div>
 
       <div class="compare-card">
         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
-          <h3 style="color: ${info2.color}; font-size: 1.15rem;">${st2.name}</h3>
-          <span class="table-aqi-pill" style="background: ${info2.color}; font-size: 0.9rem;">AQI ${st2.aqi}</span>
+          <div>
+            <span style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase;">${st2.region}</span>
+            <h3 style="color: ${info2.color}; font-size: 1.1rem; margin: 2px 0 0 0;">${st2.flag || ''} ${st2.name}</h3>
+          </div>
+          <span class="table-aqi-pill" style="background: ${info2.color}; font-size: 0.85rem;">AQI ${st2.aqi}</span>
         </div>
         <p style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 1rem;">${info2.label} - ${info2.desc}</p>
         <div class="compare-metric-row"><span class="compare-metric-lbl">PM2.5 Concentration</span><span class="compare-metric-val" style="color:${info2.color}">${st2.pm25} µg/m³</span></div>
         <div class="compare-metric-row"><span class="compare-metric-lbl">PM10 Concentration</span><span class="compare-metric-val">${st2.pm10} µg/m³</span></div>
-        <div class="compare-metric-row"><span class="compare-metric-lbl">Stubble Smoke Share</span><span class="compare-metric-val" style="color: #EF4444">${st2.stubbleShare}%</span></div>
+        <div class="compare-metric-row"><span class="compare-metric-lbl">Biomass Smoke Share</span><span class="compare-metric-val" style="color: #EF4444">${st2.stubbleShare}%</span></div>
         <div class="compare-metric-row"><span class="compare-metric-lbl">Wind Flow</span><span class="compare-metric-val">${st2.wind.direction} @ ${st2.wind.speed} km/h</span></div>
         <div class="compare-metric-row"><span class="compare-metric-lbl">Ambient Temp</span><span class="compare-metric-val">${st2.temp}°C (${st2.humidity}% RH)</span></div>
       </div>
       
-      <div style="grid-column: span 2; background: rgba(30, 41, 59, 0.5); padding: 0.9rem 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); font-size: 0.85rem; display: flex; justify-content: space-between; align-items: center;">
+      <div style="grid-column: 1 / -1; background: rgba(30, 41, 59, 0.5); padding: 0.9rem 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); font-size: 0.85rem; display: flex; justify-content: space-between; align-items: center;">
         <div><strong>Delta Analysis:</strong> ${st1.name} is <strong>${Math.abs(aqiDiff)} AQI points ${aqiDiff > 0 ? 'more polluted' : 'cleaner'}</strong> than ${st2.name}. (PM2.5 difference: ${Math.abs(pm25Diff)} µg/m³)</div>
       </div>
     `;
@@ -392,11 +434,10 @@ class AirSenseApp {
 
     // Diurnal factor
     let factor = 1.0;
-    if (hour >= 5 && hour <= 9) factor = 1.22; // Inversion layer / morning peak
-    else if (hour >= 20 && hour <= 23) factor = 1.18; // Night time accumulation
-    else if (hour >= 13 && hour <= 16) factor = 0.82; // Afternoon thermal mixing
+    if (hour >= 5 && hour <= 9) factor = 1.22;
+    else if (hour >= 20 && hour <= 23) factor = 1.18;
+    else if (hour >= 13 && hour <= 16) factor = 0.82;
 
-    // Update active station
     const station = this.stations.find(s => s.id === this.currentStationId);
     if (station) {
       const simulatedAqi = Math.round(station.aqi * factor);
@@ -414,24 +455,24 @@ class AirSenseApp {
   // Export CSV Telemetry Report
   // ==========================================
   exportTelemetryReport() {
-    let csv = 'Station ID,Station Name,AQI,Status,PM2.5 (ug/m3),PM10 (ug/m3),NO2 (ppb),SO2 (ppb),CO (mg/m3),Ozone (ppb),Stubble Share (%),Wind Direction,Wind Speed (km/h),Temperature (C),Humidity (%)\n';
+    let csv = 'Station ID,Station Name,Region,Country,AQI,Status,PM2.5 (ug/m3),PM10 (ug/m3),NO2 (ppb),SO2 (ppb),CO (mg/m3),Ozone (ppb),Smoke Share (%),Wind Direction,Wind Speed (km/h),Temperature (C),Humidity (%)\n';
     
     this.stations.forEach(s => {
       const info = getAQIInfo(s.aqi);
-      csv += `"${s.id}","${s.name}",${s.aqi},"${info.label}",${s.pm25},${s.pm10},${s.no2},${s.so2},${s.co},${s.o3},${s.stubbleShare},"${s.wind.direction}",${s.wind.speed},${s.temp},${s.humidity}\n`;
+      csv += `"${s.id}","${s.name}","${s.region}","${s.country || 'India'}",${s.aqi},"${info.label}",${s.pm25},${s.pm10},${s.no2},${s.so2},${s.co},${s.o3},${s.stubbleShare},"${s.wind.direction}",${s.wind.speed},${s.temp},${s.humidity}\n`;
     });
 
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `AirSense_Delhi_Telemetry_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `AirSense_Global_Telemetry_${new Date().toISOString().slice(0, 10)}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 
-    this.showToast('Report Exported', 'Downloaded full Delhi NCR pollutant CSV dataset', 'success');
+    this.showToast('Report Exported', 'Downloaded full World & Delhi NCR pollutant CSV dataset', 'success');
   }
 
   // ==========================================
@@ -446,97 +487,116 @@ class AirSenseApp {
       const gain = ctx.createGain();
 
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
-      osc.frequency.setValueAtTime(880.00, ctx.currentTime + 0.12); // A5
+      osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+      osc.frequency.setValueAtTime(880.00, ctx.currentTime + 0.12);
 
-      gain.gain.setValueAtTime(0.3, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
+      gain.gain.setValueAtTime(0.2, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.45);
 
       osc.connect(gain);
       gain.connect(ctx.destination);
-
       osc.start();
-      osc.stop(ctx.currentTime + 0.4);
+      osc.stop(ctx.currentTime + 0.45);
     } catch (e) {
-      console.warn('Audio synthesis not supported or blocked:', e);
+      console.warn('Audio chime unsupported or blocked:', e);
     }
   }
 
   dispatchBrowserNotification(title, body) {
     if (!this.browserNotifyEnabled || !('Notification' in window)) return;
     if (Notification.permission === 'granted') {
-      new Notification(title, {
-        body,
-        icon: 'https://cdn-icons-png.flaticon.com/512/3222/3222800.png'
-      });
+      new Notification(title, { body, icon: './favicon.ico' });
     }
   }
 
-  showToast(title, desc, type = 'info') {
-    const container = document.getElementById('toast-container');
-    if (!container) return;
-
-    const toast = document.createElement('div');
-    const icons = { severe: '⚠️', success: '✅', info: 'ℹ️' };
-    toast.className = `toast-message toast-${type}`;
-    toast.innerHTML = `
-      <span class="toast-icon">${icons[type] || 'ℹ️'}</span>
-      <div class="toast-body">
-        <div class="toast-title">${title}</div>
-        <div class="toast-desc">${desc}</div>
-      </div>
-    `;
-
-    container.appendChild(toast);
-    setTimeout(() => {
-      toast.style.opacity = '0';
-      toast.style.transform = 'translateY(15px)';
-      toast.style.transition = 'all 0.3s ease';
-      setTimeout(() => toast.remove(), 300);
-    }, 4500);
-  }
-
   checkThresholdAlerts() {
-    const severeStations = this.stations.filter(s => s.aqi >= this.alertThreshold);
-    if (severeStations.length > 0) {
-      const worst = severeStations.reduce((prev, curr) => curr.aqi > prev.aqi ? curr : prev);
+    const current = this.stations.find(s => s.id === this.currentStationId);
+    if (current && current.aqi >= this.alertThreshold) {
+      this.playAlertChime();
       this.showToast(
-        `High Pollution Alert (${severeStations.length} Stations)`,
-        `${worst.name} exceeds threshold at AQI ${worst.aqi}`,
+        `⚠️ High Pollution Alert (${current.aqi} AQI)`,
+        `${current.name} has exceeded threshold (${this.alertThreshold}). Sensitive groups wear N95!`,
         'severe'
       );
     }
   }
 
   // ==========================================
-  // Render Views
+  // Toast Notification System
+  // ==========================================
+  showToast(title, message, type = 'info') {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    
+    let icon = 'ℹ️';
+    if (type === 'severe' || type === 'danger') icon = '🚨';
+    if (type === 'success') icon = '✅';
+
+    toast.innerHTML = `
+      <div class="toast-icon">${icon}</div>
+      <div class="toast-content">
+        <div class="toast-title">${title}</div>
+        <div class="toast-desc">${message}</div>
+      </div>
+      <button class="toast-close" aria-label="Close Notification">&times;</button>
+    `;
+
+    toast.querySelector('.toast-close').addEventListener('click', () => {
+      toast.classList.add('toast-fade-out');
+      setTimeout(() => toast.remove(), 300);
+    });
+
+    container.appendChild(toast);
+
+    setTimeout(() => {
+      if (toast.parentNode) {
+        toast.classList.add('toast-fade-out');
+        setTimeout(() => toast.remove(), 300);
+      }
+    }, 5000);
+  }
+
+  // ==========================================
+  // Station Selection & Telemetry Rendering
   // ==========================================
   selectStation(stationId) {
     this.currentStationId = stationId;
+
     const select = document.getElementById('station-select');
     if (select) select.value = stationId;
 
     this.renderStationData(stationId);
     if (this.map) this.map.focusStation(stationId);
+    this.checkThresholdAlerts();
   }
 
-  renderStationData(stationId, customStationObj = null) {
-    const station = customStationObj || this.stations.find(s => s.id === stationId) || this.stations[0];
+  renderStationData(stationId, overrideData = null) {
+    const station = overrideData || this.stations.find(s => s.id === stationId);
+    if (!station) return;
+
     const info = getAQIInfo(station.aqi);
 
-    // Hero titles
+    // Hero Header
     const nameEl = document.getElementById('selected-station-name');
-    if (nameEl) nameEl.textContent = station.name;
+    if (nameEl) nameEl.textContent = `${station.flag || '📍'} ${station.name}`;
 
-    const timeEl = document.getElementById('last-updated-time');
-    if (timeEl) {
-      const now = new Date();
-      timeEl.textContent = `Updated: ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    const distBadge = document.getElementById('station-distance-badge');
+    if (distBadge) distBadge.textContent = `${station.region} • ${station.city || 'Telemetry'}`;
+
+    const updateTimeEl = document.getElementById('last-updated-time');
+    if (updateTimeEl) {
+      updateTimeEl.textContent = `Updated: ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
     }
 
-    // AQI Gauge & Value
-    if (this.gauge) this.gauge.setAQI(station.aqi);
+    // Gauge Update
+    if (this.gauge) {
+      this.gauge.setTargetValue(station.aqi);
+    }
 
+    // Current AQI Display
     const aqiValEl = document.getElementById('current-aqi-val');
     if (aqiValEl) {
       aqiValEl.textContent = station.aqi;
@@ -546,7 +606,7 @@ class AirSenseApp {
     const aqiStatusEl = document.getElementById('current-aqi-status');
     if (aqiStatusEl) {
       aqiStatusEl.textContent = info.label;
-      aqiStatusEl.style.background = info.bgGlow;
+      aqiStatusEl.style.backgroundColor = info.bgGlow;
       aqiStatusEl.style.color = info.color;
     }
 
@@ -579,7 +639,11 @@ class AirSenseApp {
 
     const stubbleAlertEl = document.getElementById('stubble-alert-text');
     if (stubbleAlertEl) {
-      stubbleAlertEl.textContent = `Prevailing North-Westerly winds (${station.wind.direction} @ ${station.wind.speed} km/h) are actively transporting agricultural biomass smoke plume into Delhi NCR basin.`;
+      if (station.region === 'Delhi NCR') {
+        stubbleAlertEl.textContent = `Prevailing North-Westerly winds (${station.wind.direction} @ ${station.wind.speed} km/h) are actively transporting agricultural biomass smoke plume into Delhi NCR basin.`;
+      } else {
+        stubbleAlertEl.textContent = `Live atmospheric telemetry for ${station.name}. Biomass smoke fraction currently measured at ${station.stubbleShare}%.`;
+      }
     }
 
     // Charts
@@ -591,28 +655,28 @@ class AirSenseApp {
   updateHealthAdvisories(aqi) {
     const mask = document.getElementById('adv-mask');
     const purifier = document.getElementById('adv-purifier');
-    const exercise = document.getElementById('adv-exercise');
+    const outdoor = document.getElementById('adv-outdoor');
     const windows = document.getElementById('adv-windows');
 
     if (aqi > 300) {
       if (mask) mask.textContent = 'N95 Required';
       if (purifier) purifier.textContent = 'Keep On (Max)';
-      if (exercise) exercise.textContent = 'Avoid Outdoors';
+      if (outdoor) outdoor.textContent = 'Avoid Outdoors';
       if (windows) windows.textContent = 'Close Sealed';
     } else if (aqi > 200) {
       if (mask) mask.textContent = 'N95 Recommended';
       if (purifier) purifier.textContent = 'Keep On (Medium)';
-      if (exercise) exercise.textContent = 'Limit Outdoors';
+      if (outdoor) outdoor.textContent = 'Limit Outdoors';
       if (windows) windows.textContent = 'Keep Closed';
     } else if (aqi > 100) {
       if (mask) mask.textContent = 'Sensitive Groups';
       if (purifier) purifier.textContent = 'Run Indoors';
-      if (exercise) exercise.textContent = 'Moderate OK';
+      if (outdoor) outdoor.textContent = 'Moderate OK';
       if (windows) windows.textContent = 'Open in Aftn';
     } else {
       if (mask) mask.textContent = 'Not Needed';
       if (purifier) purifier.textContent = 'Optional';
-      if (exercise) exercise.textContent = 'Ideal Conditions';
+      if (outdoor) outdoor.textContent = 'Ideal Conditions';
       if (windows) windows.textContent = 'Open for Air';
     }
   }
@@ -622,9 +686,13 @@ class AirSenseApp {
     if (!tbody) return;
     tbody.innerHTML = '';
 
-    const filtered = this.stations.filter(s => 
-      s.name.toLowerCase().includes(filterText.toLowerCase())
-    );
+    const filtered = this.stations.filter(s => {
+      const matchesSearch = s.name.toLowerCase().includes(filterText.toLowerCase()) ||
+                            (s.city && s.city.toLowerCase().includes(filterText.toLowerCase())) ||
+                            (s.country && s.country.toLowerCase().includes(filterText.toLowerCase()));
+      const matchesRegion = this.currentRegionFilter === 'all' || s.region === this.currentRegionFilter;
+      return matchesSearch && matchesRegion;
+    });
 
     filtered.forEach(station => {
       const info = getAQIInfo(station.aqi);
@@ -632,9 +700,12 @@ class AirSenseApp {
       row.innerHTML = `
         <td>
           <div class="table-station-name">
-            <span>📍</span>
+            <span>${station.flag || '📍'}</span>
             <span>${station.name}</span>
           </div>
+        </td>
+        <td>
+          <span class="table-region-tag">${station.region}</span>
         </td>
         <td>
           <span class="table-aqi-pill" style="background: ${info.color};">
@@ -643,7 +714,7 @@ class AirSenseApp {
         </td>
         <td><strong>${station.pm25}</strong> µg/m³</td>
         <td><strong>${station.pm10}</strong> µg/m³</td>
-        <td><span style="color: #EF4444; font-weight: 600;">${station.stubbleShare}%</span></td>
+        <td><span style="color: ${station.stubbleShare > 15 ? '#EF4444' : '#10B981'}; font-weight: 600;">${station.stubbleShare}%</span></td>
         <td>${station.wind.direction} ${station.wind.speed} km/h</td>
         <td>${station.temp}°C</td>
         <td>
@@ -660,17 +731,12 @@ class AirSenseApp {
     });
   }
 
-  filterStationsTable(text) {
-    this.renderStationsTable(text);
-  }
-
   refreshLiveData() {
-    // Add subtle stochastic variation to simulate live reading updates
     this.stations.forEach(s => {
       const delta = Math.floor(Math.random() * 7) - 3;
-      s.aqi = Math.max(30, Math.min(490, s.aqi + delta));
-      s.pm25 = Math.max(20, Math.round(s.aqi * 0.75));
-      s.pm10 = Math.max(30, Math.round(s.aqi * 1.12));
+      s.aqi = Math.max(20, Math.min(490, s.aqi + delta));
+      s.pm25 = Math.max(10, Math.round(s.aqi * 0.75));
+      s.pm10 = Math.max(15, Math.round(s.aqi * 1.12));
     });
 
     this.renderStationData(this.currentStationId);
