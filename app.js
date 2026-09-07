@@ -7,9 +7,9 @@ import { fetchLiveWeather, mapWeatherToVisualState, getWeatherStateMetadata } fr
 class AirSenseApp {
   constructor() {
     this.stations = [...STATIONS];
-    this.currentStationId = 'anand-vihar';
+    this.currentStationId = 'mundka';
     this.currentRegionFilter = 'all';
-    this.currentTheme = localStorage.getItem('airsense_theme') || 'dark';
+    this.currentTheme = localStorage.getItem('airsense_theme') || 'light';
     this.currentWeatherState = 'moderate-cloudy';
     
     this.gauge = null;
@@ -69,7 +69,7 @@ class AirSenseApp {
   // Weather-Reactive Theme Management
   // ==========================================
   setupTheme() {
-    const savedTheme = localStorage.getItem('airsense_theme') || 'dark';
+    const savedTheme = localStorage.getItem('airsense_theme') || 'light';
     this.setTheme(savedTheme);
   }
 

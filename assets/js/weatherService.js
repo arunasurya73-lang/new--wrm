@@ -43,10 +43,13 @@ export async function fetchLiveWeather(lat, lng) {
     // localStorage parsing error fallback
   }
 
-  // Fetch live from Open-Meteo free API
+  // Fetch live from Open-Meteo free API (with 3s timeout)
   try {
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(4)}&longitude=${lng.toFixed(4)}&current=weather_code,cloud_cover,is_day`;
-    const res = await fetch(url);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
     if (res.ok) {
       const json = await res.json();
       if (json && json.current) {
