@@ -1,29 +1,37 @@
 import { generate24HourTrend, generate7DayForecast, getAQIInfo } from './stationData.js';
 
 export class ForecastCharts {
-  constructor(canvas24hId, canvas7dId, canvasRadarId = 'chart-radar') {
-    this.canvas24h = document.getElementById(canvas24hId);
-    this.canvas7d = document.getElementById(canvas7dId);
-    this.canvasRadar = document.getElementById(canvasRadarId);
+  constructor(canvas24hId = 'chart-24h', canvas7dId = 'chart-7d', canvasRadarId = 'chart-radar') {
+    this.canvas24hId = canvas24hId;
+    this.canvas7dId = canvas7dId;
+    this.canvasRadarId = canvasRadarId;
     this.chart24h = null;
     this.chart7d = null;
     this.chartRadar = null;
   }
 
+  getCanvas(id) {
+    return document.getElementById(id);
+  }
+
   updateCharts(station) {
+    if (!station) return;
     if (!window.Chart) {
-      console.error('Chart.js not loaded');
+      console.warn('Chart.js not yet loaded, retrying in 250ms...');
+      setTimeout(() => this.updateCharts(station), 250);
       return;
     }
 
     this.render24HourChart(station);
     this.render7DayChart(station);
-    if (this.canvasRadar) this.renderRadarChart(station);
+    this.renderRadarChart(station);
   }
 
   render24HourChart(station) {
+    const canvas = this.getCanvas(this.canvas24hId);
+    if (!canvas) return;
     const trendData = generate24HourTrend(station.aqi);
-    const ctx = this.canvas24h.getContext('2d');
+    const ctx = canvas.getContext('2d');
     const isDark = !document.documentElement.classList.contains('light');
     const textColor = isDark ? '#94A3B8' : '#64748B';
     const gridColor = isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.06)';
@@ -151,8 +159,10 @@ export class ForecastCharts {
   }
 
   render7DayChart(station) {
+    const canvas = this.getCanvas(this.canvas7dId);
+    if (!canvas) return;
     const forecast = generate7DayForecast(station.aqi);
-    const ctx = this.canvas7d.getContext('2d');
+    const ctx = canvas.getContext('2d');
     const isDark = !document.documentElement.classList.contains('light');
     const textColor = isDark ? '#94A3B8' : '#64748B';
     const gridColor = isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.06)';
@@ -213,8 +223,9 @@ export class ForecastCharts {
   }
 
   renderRadarChart(station) {
-    if (!this.canvasRadar) return;
-    const ctx = this.canvasRadar.getContext('2d');
+    const canvas = this.getCanvas(this.canvasRadarId);
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
     const isDark = !document.documentElement.classList.contains('light');
     const textColor = isDark ? '#94A3B8' : '#64748B';
     const gridColor = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';

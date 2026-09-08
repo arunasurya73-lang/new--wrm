@@ -26,6 +26,10 @@ export class AQIGauge {
     this.animate();
   }
 
+  setTargetValue(targetValue) {
+    this.setAQI(targetValue);
+  }
+
   animate() {
     if (this.animationFrame) cancelAnimationFrame(this.animationFrame);
 
