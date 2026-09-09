@@ -32,29 +32,29 @@ const MIME_TYPES = {
   '.webp': 'image/webp'
 };
 
-const server = http.createServer(async (req, res) => {
+export default async function handler(req, res) {
   const parsedUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const pathname = parsedUrl.pathname;
+
+  // Polyfill express-like status/json helpers for Serverless & Native HTTP compatibility
+  if (!res.status) {
+    res.status = function(code) {
+      res.statusCode = code;
+      return res;
+    };
+  }
+  if (!res.json) {
+    res.json = function(data) {
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.end(JSON.stringify(data, null, 2));
+    };
+  }
 
   // Handle API routes
   if (pathname === '/api/stations' || pathname === '/api/stations.js') {
     try {
-      const { default: handler } = await import('./api/stations.js');
-      // Create mock express-like response methods if needed
-      const customRes = {
-        setHeader: (name, val) => res.setHeader(name, val),
-        status: (code) => {
-          res.statusCode = code;
-          return {
-            json: (data) => {
-              res.setHeader('Content-Type', 'application/json; charset=utf-8');
-              res.end(JSON.stringify(data, null, 2));
-            },
-            send: (data) => res.end(data)
-          };
-        }
-      };
-      return await handler(req, customRes);
+      const { default: apiHandler } = await import('./api/stations.js');
+      return await apiHandler(req, res);
     } catch (err) {
       res.statusCode = 500;
       res.setHeader('Content-Type', 'application/json');
@@ -64,21 +64,8 @@ const server = http.createServer(async (req, res) => {
 
   if (pathname === '/api/ingest' || pathname === '/api/ingest.js') {
     try {
-      const { default: handler } = await import('./api/ingest.js');
-      const customRes = {
-        setHeader: (name, val) => res.setHeader(name, val),
-        status: (code) => {
-          res.statusCode = code;
-          return {
-            json: (data) => {
-              res.setHeader('Content-Type', 'application/json; charset=utf-8');
-              res.end(JSON.stringify(data, null, 2));
-            },
-            send: (data) => res.end(data)
-          };
-        }
-      };
-      return await handler(req, customRes);
+      const { default: apiHandler } = await import('./api/ingest.js');
+      return await apiHandler(req, res);
     } catch (err) {
       res.statusCode = 500;
       res.setHeader('Content-Type', 'application/json');
@@ -89,23 +76,34 @@ const server = http.createServer(async (req, res) => {
   // Handle Static Files
   let filePath = path.join(__dirname, pathname === '/' ? 'index.html' : pathname);
 
-  fs.stat(filePath, (err, stats) => {
-    if (err || !stats.isFile()) {
-      res.statusCode = 404;
-      res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      res.end('<h1>404 Not Found</h1><p>Resource not found on AirSense server.</p>');
-      return;
+  try {
+    if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+      const ext = path.extname(filePath).toLowerCase();
+      const contentType = MIME_TYPES[ext] || 'application/octet-stream';
+      res.setHeader('Content-Type', contentType);
+      return fs.createReadStream(filePath).pipe(res);
     }
 
-    const ext = path.extname(filePath).toLowerCase();
-    const contentType = MIME_TYPES[ext] || 'application/octet-stream';
-    res.setHeader('Content-Type', contentType);
+    // Fallback to index.html for client-side routing
+    const indexPath = path.join(__dirname, 'index.html');
+    if (fs.existsSync(indexPath)) {
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return fs.createReadStream(indexPath).pipe(res);
+    }
+  } catch (err) {
+    console.error('Static serve error:', err);
+  }
 
-    const stream = fs.createReadStream(filePath);
-    stream.pipe(res);
+  res.statusCode = 404;
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.end('<h1>404 Not Found</h1><p>Resource not found on AirSense server.</p>');
+}
+
+const server = http.createServer(handler);
+
+// Only listen on port if not in Vercel Serverless environment
+if (!process.env.VERCEL && !process.env.NOW_REGION) {
+  server.listen(PORT, () => {
+    console.log(`🌿 AirSense Delhi server running at: http://localhost:${PORT}`);
   });
-});
-
-server.listen(PORT, () => {
-  console.log(`🌿 AirSense Delhi server running at: http://localhost:${PORT}`);
-});
+}
