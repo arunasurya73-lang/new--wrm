@@ -1,3 +1,21 @@
 {
-  "version": 2
+  "version": 2,
+  "cleanUrls": true,
+  "routes": [
+    {
+      "src": "/api/stations",
+      "dest": "/api/stations.js"
+    },
+    {
+      "src": "/api/ingest",
+      "dest": "/api/ingest.js"
+    },
+    {
+      "handle": "filesystem"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
+    }
+  ]
 }
