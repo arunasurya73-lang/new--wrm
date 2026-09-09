@@ -11,7 +11,7 @@ export class MapTracker {
     this.heatHaloLayer = null;
     this.windCanvas = null;
     this.currentBaseLayerType = 'satellite'; // 'satellite' | 'dark' | 'streets'
-    this.currentScope = 'world'; // 'world' | 'india' | 'delhi'
+    this.currentScope = 'corridor'; // Default: 'corridor' (Delhi NCR + Punjab/Haryana) | 'delhi' | 'india' | 'world'
     
     this.showSmoke = true;
     this.showHotspots = true;
@@ -31,10 +31,10 @@ export class MapTracker {
       return;
     }
 
-    // Centered initially with World / Global View with unrestricted pan & zoom
+    // Centered initially on Delhi NCR + Punjab/Haryana Stubble-Burning Source Region
     this.map = L.map(this.containerId, {
-      center: [22.0000, 20.0000],
-      zoom: 3,
+      center: [29.6500, 76.5000],
+      zoom: 7,
       minZoom: 2,
       maxZoom: 18,
       worldCopyJump: true,
@@ -96,14 +96,14 @@ export class MapTracker {
     controlsContainer.className = 'map-floating-bar';
     controlsContainer.innerHTML = `
       <div class="map-scope-group">
-        <button id="map-scope-world" class="map-mode-btn ${this.currentScope === 'world' ? 'active' : ''}" title="Global World Map View">
-          <span>🌍</span> World
+        <button id="map-scope-corridor" class="map-mode-btn ${this.currentScope === 'corridor' ? 'active' : ''}" title="Delhi NCR & Upwind Punjab/Haryana Agricultural Fire Corridor">
+          <span>🌾</span> Delhi & Fire Corridor
+        </button>
+        <button id="map-scope-delhi" class="map-mode-btn ${this.currentScope === 'delhi' ? 'active' : ''}" title="Delhi NCR Telemetry Network (Zoomed)">
+          <span>📍</span> Delhi NCR
         </button>
         <button id="map-scope-india" class="map-mode-btn ${this.currentScope === 'india' ? 'active' : ''}" title="India Regional Overview">
           <span>🇮🇳</span> India
-        </button>
-        <button id="map-scope-delhi" class="map-mode-btn ${this.currentScope === 'delhi' ? 'active' : ''}" title="Delhi NCR Telemetry Network">
-          <span>📍</span> Delhi NCR
         </button>
       </div>
       <div class="map-view-toggle-group">
@@ -132,9 +132,9 @@ export class MapTracker {
       mapWrap.appendChild(controlsContainer);
 
       // Event Listeners for Scope Switchers
-      document.getElementById('map-scope-world')?.addEventListener('click', () => this.setScope('world'));
-      document.getElementById('map-scope-india')?.addEventListener('click', () => this.setScope('india'));
+      document.getElementById('map-scope-corridor')?.addEventListener('click', () => this.setScope('corridor'));
       document.getElementById('map-scope-delhi')?.addEventListener('click', () => this.setScope('delhi'));
+      document.getElementById('map-scope-india')?.addEventListener('click', () => this.setScope('india'));
 
       // Event Listeners for Layer Toggles
       document.getElementById('map-mode-satellite')?.addEventListener('click', () => this.switchBaseMap('satellite'));
@@ -159,16 +159,16 @@ export class MapTracker {
 
   setScope(scope) {
     this.currentScope = scope;
-    ['world', 'india', 'delhi'].forEach(s => {
+    ['corridor', 'delhi', 'india'].forEach(s => {
       document.getElementById(`map-scope-${s}`)?.classList.toggle('active', s === scope);
     });
 
-    if (scope === 'world') {
-      this.map.flyTo([22.0, 20.0], 3, { duration: 1.5 });
-    } else if (scope === 'india') {
-      this.map.flyTo([22.5, 78.9], 5, { duration: 1.2 });
+    if (scope === 'corridor') {
+      this.map.flyTo([29.65, 76.50], 7, { duration: 1.2 });
     } else if (scope === 'delhi') {
       this.map.flyTo([28.66, 77.16], 10, { duration: 1.2 });
+    } else if (scope === 'india') {
+      this.map.flyTo([22.5, 78.9], 5, { duration: 1.2 });
     }
   }
 
@@ -317,41 +317,64 @@ export class MapTracker {
     if (this.smokeLayer) this.smokeLayer.remove();
     this.smokeLayer = L.layerGroup();
 
-    // 1. Primary Inversion Dispersion Envelope (Indo-Gangetic Basin)
+    // 1. Broad Outer Atmospheric Smoke Haze (Indo-Gangetic Basin Transport Corridor)
     const outerPlume = L.polygon([
-      [31.20, 74.80],
-      [31.40, 76.50],
-      [30.20, 77.80],
-      [28.80, 77.70],
-      [28.25, 77.25],
-      [28.70, 76.20],
-      [29.80, 75.20]
+      [31.45, 74.60],
+      [31.60, 76.70],
+      [30.40, 78.10],
+      [28.95, 77.95],
+      [28.15, 77.40],
+      [28.45, 76.10],
+      [29.50, 74.90],
+      [30.60, 74.50]
     ], {
-      color: '#f97316',
-      weight: 1.2,
-      dashArray: '5, 8',
-      fillColor: '#c2410c',
-      fillOpacity: 0.22,
+      stroke: false,
+      fillColor: '#b45309',
+      fillOpacity: 0.24,
+      className: 'realistic-smoke-outer',
       interactive: false
     });
 
-    // 2. Dense Core Plume (Heavy PM2.5 Accumulation)
+    // 2. High-Density Core Biomass Smoke Stream
     const corePlume = L.polygon([
-      [30.90, 75.60],
-      [30.70, 76.70],
-      [29.90, 77.20],
-      [28.95, 77.40],
-      [28.50, 77.20],
-      [29.20, 76.50]
+      [31.00, 75.40],
+      [30.85, 76.85],
+      [30.00, 77.40],
+      [29.10, 77.55],
+      [28.40, 77.30],
+      [28.90, 76.45],
+      [30.00, 75.60]
     ], {
-      color: '#ef4444',
-      weight: 1.5,
+      stroke: true,
+      color: 'rgba(239, 68, 68, 0.4)',
+      weight: 1,
+      dashArray: '6, 12',
       fillColor: '#991b1b',
       fillOpacity: 0.32,
+      className: 'realistic-smoke-core',
       interactive: false
     });
 
-    outerPlume.bindTooltip("<b>Biomass Smoke Dispersion Plume</b><br>North-Westerly transport corridor carrying PM2.5 into Delhi basin", { sticky: true });
+    // 3. Dense Smoke Accumulation Centroids (Gaussian-Diffused Hotspot Zones)
+    const smokeCentroids = [
+      { center: [30.70, 75.90], radius: 48000, opacity: 0.28, color: '#7c2d12' }, // Punjab Agricultural Fire Belt
+      { center: [29.85, 76.85], radius: 40000, opacity: 0.25, color: '#9a3412' }, // Kurukshetra / Karnal Corridor
+      { center: [28.75, 77.18], radius: 32000, opacity: 0.30, color: '#b91c1c' }  // Delhi NCR Fumigation Basin
+    ];
+
+    smokeCentroids.forEach(c => {
+      const circle = L.circle(c.center, {
+        radius: c.radius,
+        stroke: false,
+        fillColor: c.color,
+        fillOpacity: c.opacity,
+        className: 'realistic-smoke-core',
+        interactive: false
+      });
+      this.smokeLayer.addLayer(circle);
+    });
+
+    outerPlume.bindTooltip("<b>Biomass Smoke Dispersion Plume</b><br>North-Westerly transport corridor carrying PM2.5 into Delhi NCR basin", { sticky: true });
     this.smokeLayer.addLayer(outerPlume);
     this.smokeLayer.addLayer(corePlume);
 
@@ -399,7 +422,7 @@ export class MapTracker {
   }
 
   // ==========================================
-  // Animated Wind Particle Streamlines
+  // Animated Wind Particles & Drifting Smoke Streamlines
   // ==========================================
   initWindParticleFlow() {
     const mapPane = this.map.getPanes().overlayPane;
@@ -424,10 +447,16 @@ export class MapTracker {
     resizeCanvas();
 
     // Generate streaming wind particles
-    const particleCount = 140;
+    const particleCount = 130;
     this.windParticles = [];
     for (let i = 0; i < particleCount; i++) {
       this.windParticles.push(this.createRandomParticle());
+    }
+
+    // Generate animated drifting smoke plume puffs
+    this.smokePuffs = [];
+    for (let i = 0; i < 35; i++) {
+      this.smokePuffs.push(this.createSmokePuff());
     }
 
     this.animateWind();
@@ -445,19 +474,82 @@ export class MapTracker {
     };
   }
 
+  createSmokePuff() {
+    const size = this.map.getSize();
+    // Emitters in the upwind Punjab/Haryana fire corridor
+    const fireHotspotsNW = [
+      [30.90, 75.85], // Ludhiana
+      [30.34, 76.38], // Sangrur / Patiala
+      [29.68, 76.99], // Karnal
+      [31.14, 75.34], // Moga
+      [29.96, 76.87]  // Kurukshetra
+    ];
+    const origin = fireHotspotsNW[Math.floor(Math.random() * fireHotspotsNW.length)];
+    const pt = this.map.latLngToContainerPoint(origin);
+
+    return {
+      originLat: origin[0],
+      originLng: origin[1],
+      x: pt.x + (Math.random() * 40 - 20),
+      y: pt.y + (Math.random() * 40 - 20),
+      radius: Math.random() * 18 + 14,
+      maxRadius: Math.random() * 55 + 45,
+      speed: Math.random() * 0.8 + 0.6,
+      opacity: Math.random() * 0.45 + 0.25,
+      age: Math.random() * 80,
+      maxAge: 180 + Math.random() * 80
+    };
+  }
+
   animateWind() {
     if (!this.windCanvas) return;
     const ctx = this.windCanvas.getContext('2d');
     const size = this.map.getSize();
 
-    if (this.showWindFlow) {
-      ctx.clearRect(0, 0, size.x, size.y);
+    ctx.clearRect(0, 0, size.x, size.y);
 
-      // Atmospheric vector flow: NW towards SE
-      const angle = (135 * Math.PI) / 180;
-      const vx = Math.cos(angle);
-      const vy = Math.sin(angle);
+    // Atmospheric vector flow: NW (315°) towards SE (135°)
+    const angle = (135 * Math.PI) / 180;
+    const vx = Math.cos(angle);
+    const vy = Math.sin(angle);
 
+    // 1. Render Drifting Smoke Haze Puffs (if Smoke layer is active)
+    if (this.showSmoke && this.smokePuffs) {
+      this.smokePuffs.forEach(puff => {
+        puff.x += vx * puff.speed;
+        puff.y += vy * puff.speed;
+        puff.age++;
+
+        // Expand radius as smoke disperses downwind
+        const progress = puff.age / puff.maxAge;
+        const currentRadius = puff.radius + (puff.maxRadius - puff.radius) * progress;
+        const currentOpacity = puff.opacity * (1 - Math.pow(progress, 1.4));
+
+        if (puff.age > puff.maxAge || puff.x > size.x + 100 || puff.y > size.y + 100) {
+          const pt = this.map.latLngToContainerPoint([puff.originLat, puff.originLng]);
+          puff.x = pt.x + (Math.random() * 30 - 15);
+          puff.y = pt.y + (Math.random() * 30 - 15);
+          puff.age = 0;
+        }
+
+        // Draw soft radial smoke gradient puff
+        if (currentOpacity > 0.02 && puff.x >= -60 && puff.x <= size.x + 60 && puff.y >= -60 && puff.y <= size.y + 60) {
+          const grad = ctx.createRadialGradient(puff.x, puff.y, 0, puff.x, puff.y, currentRadius);
+          grad.addColorStop(0, `rgba(180, 83, 9, ${currentOpacity * 0.7})`);
+          grad.addColorStop(0.45, `rgba(154, 52, 18, ${currentOpacity * 0.45})`);
+          grad.addColorStop(0.8, `rgba(124, 45, 18, ${currentOpacity * 0.18})`);
+          grad.addColorStop(1, 'rgba(124, 45, 18, 0)');
+
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          ctx.arc(puff.x, puff.y, currentRadius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      });
+    }
+
+    // 2. Render Wind Streamlines (if Wind layer is active)
+    if (this.showWindFlow && this.windParticles) {
       this.windParticles.forEach(p => {
         p.x += vx * p.speed;
         p.y += vy * p.speed;

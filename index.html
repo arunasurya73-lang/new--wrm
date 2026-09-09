@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AirSense Delhi - Real-time Delhi AQI Forecast & Satellite Fire Tracker</title>
-  <meta name="description" content="Next-generation Delhi NCR & World air quality index forecasting, real-time pollutant telemetry, satellite biomass smoke tracking, and localized health advisories." />
+  <meta name="description" content="Next-generation Delhi NCR air quality index forecasting, real-time pollutant telemetry, coupled atmospheric inversion physics, and satellite biomass smoke tracking." />
 
   <!-- Fonts & Icons -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -47,11 +47,9 @@
     <!-- Top Navbar -->
     <header class="navbar" id="main-nav">
       <div class="nav-brand">
-        <div class="brand-icon-wrap">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"></circle>
-            <line x1="2" y1="12" x2="22" y2="12"></line>
-            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+        <div class="brand-icon-wrap" title="AirSense Delhi Atmospheric Intelligence">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2"/>
           </svg>
         </div>
         <div>
@@ -61,7 +59,7 @@
               <span class="pulse-dot"></span>
               LIVE SATELLITE & TELEMETRY
             </span>
-            <span>• Delhi NCR & World Air Quality</span>
+            <span>• Delhi NCR Air Quality</span>
           </div>
         </div>
       </div>
@@ -109,31 +107,37 @@
       </div>
     </header>
 
-    <!-- Stubble Smoke Alert Banner -->
+    <!-- Stubble-Burning Plume Dispersion & Transport Forecast -->
     <div class="stubble-banner" id="stubble-banner">
       <div class="stubble-info">
         <div class="stubble-icon">🌾🔥</div>
         <div class="stubble-text">
-          <h3>Active Biomass & Stubble Burning Smoke Tracker</h3>
-          <p id="stubble-alert-text">NASA FIRMS satellite sensors detect active thermal hotspots in Northern India agricultural corridors & global wildfire zones.</p>
+          <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+            <h3>Agricultural Biomass Smoke & Stubble Plume Trajectory</h3>
+            <span class="pulse-badge" id="plume-trajectory-badge" style="background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.3); color: #EF4444; font-size: 0.7rem; padding: 2px 8px;">
+              <span class="pulse-dot" style="background-color: #EF4444;"></span>
+              DOWNWIND TRAJECTORY ACTIVE
+            </span>
+          </div>
+          <p id="stubble-alert-text">4 active agricultural hotspot clusters detected NW of Delhi (Sangrur, Ludhiana, Karnal). North-Westerly wind actively carrying smoke plume toward Delhi NCR corridor, estimated arrival in ~6 hours.</p>
         </div>
       </div>
-      <div class="stubble-stat-box">
-        <div class="stubble-stat-num" id="stubble-pct-val">32%</div>
-        <div class="stubble-stat-lbl">Smoke Share in PM2.5</div>
+      <div class="stubble-stat-box" id="stubble-forecast-box">
+        <div class="stubble-stat-num" id="stubble-eta-val">~6 hrs</div>
+        <div class="stubble-stat-lbl" id="stubble-eta-lbl">Plume ETA to Delhi NCR</div>
       </div>
     </div>
 
-    <!-- 24-Hour Diurnal Timeline Scrubber & Simulation Bar -->
+    <!-- 72-Hour Atmospheric Simulation & Forecast Scrubber -->
     <div class="time-scrubber-card glass-card" id="timeline-scrubber">
       <div class="scrubber-header">
         <div class="scrubber-label-group">
-          <span class="scrubber-live-tag">TIMELINE PLAYER</span>
-          <span class="scrubber-time-display" id="scrubber-time-label">Current: Live Telemetry (22:00)</span>
+          <span class="scrubber-live-tag">72H FORECAST SCRUBBER</span>
+          <span class="scrubber-time-display" id="scrubber-time-label">Live Baseline (+0h)</span>
         </div>
         <div class="scrubber-controls">
           <button id="scrubber-play-btn" class="scrubber-btn">
-            <span id="play-icon">▶</span> Play 24h Loop
+            <span id="play-icon">▶</span> Play 72h Loop
           </button>
           <button id="scrubber-reset-btn" class="scrubber-btn secondary">
             Reset to Live
@@ -141,9 +145,9 @@
         </div>
       </div>
       <div class="scrubber-slider-wrap">
-        <span class="scrubber-tick-label">00:00</span>
-        <input type="range" id="time-slider" min="0" max="23" value="22" step="1" class="time-range-slider" aria-label="24-Hour Diurnal Time Scrubber">
-        <span class="scrubber-tick-label">23:00</span>
+        <span class="scrubber-tick-label">Now (+0h)</span>
+        <input type="range" id="time-slider" min="0" max="72" value="0" step="1" class="time-range-slider" aria-label="72-Hour Atmospheric Forecast Scrubber">
+        <span class="scrubber-tick-label">+72h Outlook</span>
       </div>
     </div>
 
@@ -260,12 +264,12 @@
       <section class="glass-card map-card" id="map-section">
         <div class="map-header">
           <div>
-            <h2 style="font-size: 1.25rem;">Spatial AQI & Global Satellite Map</h2>
-            <p style="font-size: 0.8rem; color: var(--text-secondary);">Interactive World Satellite Map with NASA FIRMS active fire hotspots and atmospheric wind vectors</p>
+            <h2 style="font-size: 1.25rem;">Spatial AQI & Satellite Fire Plume Map</h2>
+            <p style="font-size: 0.8rem; color: var(--text-secondary);">Interactive Delhi NCR & Punjab/Haryana Agricultural Fire Corridor with NASA FIRMS active hotspots and atmospheric wind vectors</p>
           </div>
           <div class="pulse-badge" style="background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.3); color: #EF4444;">
             <span class="pulse-dot" style="background-color: #EF4444; box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);"></span>
-            LIVE SATELLITE
+            LIVE SOURCE CORRIDOR
           </div>
         </div>
 
@@ -275,31 +279,74 @@
       </section>
     </main>
 
-    <!-- Analytics & Forecast Charts Section -->
-    <section class="charts-section">
-      <!-- 24-Hour Inversion & Trend Curve -->
-      <div class="glass-card">
-        <div class="chart-card-header">
-          <div>
-            <h3 style="font-size: 1.15rem;">24-Hour Diurnal Trend & Dispersion</h3>
-            <p style="font-size: 0.78rem; color: var(--text-secondary);">Hourly AQI progression and smoke fraction curve</p>
-          </div>
+    <!-- Atmospheric Inversion & Boundary Layer Mixing Panel (Feature 1) -->
+    <section class="glass-card inversion-panel-card" id="inversion-panel-section" style="margin-top: 1.5rem;">
+      <div class="inversion-panel-header">
+        <div>
+          <div class="inversion-badge-tag">ATMOSPHERIC PHYSICS COUPLING</div>
+          <h3 style="font-size: 1.2rem; margin-top: 0.25rem;">Atmospheric Inversion & Boundary Layer Mixing (72h)</h3>
+          <p style="font-size: 0.8rem; color: var(--text-secondary);">Coupled thermodynamic soundings from Open-Meteo: Inversion Delta (850hPa - 2m ΔT) & Planetary Boundary Layer (PBL) Ventilation</p>
         </div>
-        <div class="chart-wrapper">
-          <canvas id="chart-24h"></canvas>
+        <div class="inversion-status-pill" id="inversion-status-pill">
+          <span class="inversion-status-dot" id="inversion-status-dot"></span>
+          <span id="inversion-status-label">Strong Inversion</span>
         </div>
       </div>
 
-      <!-- 7-Day Forecast Outlook -->
+      <div class="inversion-metrics-grid">
+        <div class="inversion-metric-box">
+          <span class="inversion-metric-lbl">Inversion Delta (850hPa - 2m ΔT)</span>
+          <span class="inversion-metric-val" id="inversion-delta-val">+1.4 °C</span>
+          <span class="inversion-metric-sub" id="inversion-delta-sub">Thermal Trapping Ceiling Active</span>
+        </div>
+        <div class="inversion-metric-box">
+          <span class="inversion-metric-lbl">Planetary Boundary Layer (PBL)</span>
+          <span class="inversion-metric-val" id="inversion-pbl-val">310 m</span>
+          <span class="inversion-metric-sub" id="inversion-pbl-sub" style="color: #EF4444;">⚠️ Below 500m Critical Trapping Height</span>
+        </div>
+        <div class="inversion-metric-box">
+          <span class="inversion-metric-lbl">Ventilation Index</span>
+          <span class="inversion-metric-val" id="inversion-vent-val">1,860 m²/s</span>
+          <span class="inversion-metric-sub" id="inversion-vent-sub">PBL × Surface Wind Velocity</span>
+        </div>
+      </div>
+
+      <!-- Plain Language Dynamic Explanation Banner -->
+      <div class="inversion-dynamic-desc" id="inversion-dynamic-desc">
+        Strong atmospheric inversion (+1.4°C inversion delta, PBL 310m) — severe thermal cap will trap pollutants near the surface, AQI likely to spike sharply after 9 PM.
+      </div>
+
+      <!-- 72-Hour Boundary Layer Height Line Chart with 500m Trapping Risk Shaded Zone -->
+      <div class="inversion-chart-container" style="height: 240px; margin-top: 1.25rem;">
+        <canvas id="chart-pbl-inversion"></canvas>
+      </div>
+    </section>
+
+    <!-- Analytics & Forecast Charts Section (Explicit 72-Hour Outlook) -->
+    <section class="charts-section">
+      <!-- 72-Hour Coupled Meteorology-Chemistry AQI Outlook with Confidence Band -->
       <div class="glass-card">
         <div class="chart-card-header">
           <div>
-            <h3 style="font-size: 1.15rem;">7-Day Weather & AQI Forecast</h3>
-            <p style="font-size: 0.78rem; color: var(--text-secondary);">Projected air quality based on meteorological models</p>
+            <h3 style="font-size: 1.15rem;">72-Hour Coupled Meteorology-Chemistry AQI Outlook</h3>
+            <p style="font-size: 0.78rem; color: var(--text-secondary);">Hourly projection with atmospheric inversion-expanded confidence envelope</p>
           </div>
         </div>
         <div class="chart-wrapper">
           <canvas id="chart-7d"></canvas>
+        </div>
+      </div>
+
+      <!-- 72-Hour Multi-Pollutant & Smoke Dispersion Outlook -->
+      <div class="glass-card">
+        <div class="chart-card-header">
+          <div>
+            <h3 style="font-size: 1.15rem;">72-Hour Multi-Pollutant & Smoke Dispersion Outlook</h3>
+            <p style="font-size: 0.78rem; color: var(--text-secondary);">72-hour hourly PM2.5, PM10 and stubble smoke fraction progression</p>
+          </div>
+        </div>
+        <div class="chart-wrapper">
+          <canvas id="chart-24h"></canvas>
         </div>
       </div>
 
@@ -366,11 +413,11 @@
     <!-- Footer -->
     <footer class="app-footer">
       <div>
-        <strong>AirSense Delhi</strong> &bull; Open Environmental Data, Delhi NCR & World AQI & NASA FIRMS Satellite Tracking
+        <strong>AirSense Delhi</strong> &bull; Open Environmental Data, Delhi NCR AQI & NASA FIRMS Satellite Tracking
       </div>
       <div class="footer-links">
         <a href="#hero-aqi-section" class="footer-link">Live Telemetry</a>
-        <a href="#map-section" class="footer-link">World Satellite Map</a>
+        <a href="#map-section" class="footer-link">Corridor Satellite Map</a>
         <a href="https://firms.modaps.eosdis.nasa.gov/" target="_blank" rel="noopener noreferrer" class="footer-link">NASA FIRMS</a>
       </div>
     </footer>

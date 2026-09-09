@@ -1008,6 +1008,48 @@ export const STUBBLE_FIRE_HOTSPOTS = [
   { lat: 6.6111, lng: 20.9394, intensity: 'Severe (2,100 detections)', region: 'Central African Savannah 🇨🇫', type: 'Savannah Biomass Burning' }
 ];
 
+export function generate72HourTrend(baseAqi, basePm25 = null, basePm10 = null, profileData = null) {
+  const pm25Val = basePm25 !== null ? basePm25 : Math.round(baseAqi * 0.75);
+  const pm10Val = basePm10 !== null ? basePm10 : Math.round(baseAqi * 1.08);
+  const labels = [];
+  const aqiData = [];
+  const pm25Data = [];
+  const pm10Data = [];
+  const stubbleData = [];
+  const now = new Date();
+
+  for (let i = 0; i < 72; i++) {
+    const time = new Date(now.getTime() + i * 3600 * 1000);
+    const hour = time.getHours();
+    const hourLabel = (i % 6 === 0 || i === 0) 
+      ? `${time.toLocaleDateString('en-IN', { weekday: 'short' })} ${hour.toString().padStart(2, '0')}:00`
+      : `${hour.toString().padStart(2, '0')}:00`;
+    labels.push(hourLabel);
+
+    let diurnal = 1.0;
+    if (hour >= 6 && hour <= 9) diurnal = 1.25;
+    else if (hour >= 20 && hour <= 23) diurnal = 1.22;
+    else if (hour >= 13 && hour <= 16) diurnal = 0.82;
+
+    const inv = (profileData && profileData.inversionIndices && profileData.inversionIndices[i] !== undefined)
+      ? profileData.inversionIndices[i]
+      : ((hour >= 20 || hour <= 8) ? 1.4 : -2.5);
+
+    const invImpact = inv > 0 ? (inv * 10) : (inv * 4);
+    const projectedAqi = Math.round(Math.max(25, Math.min(490, (baseAqi * diurnal * 0.92) + invImpact + Math.sin(i / 3) * 6)));
+    const projectedPm25 = Math.round(Math.max(15, (pm25Val * diurnal * 0.92) + (invImpact * 0.8) + Math.sin(i / 3) * 5));
+    const projectedPm10 = Math.round(Math.max(25, (pm10Val * diurnal * 0.92) + (invImpact * 1.1) + Math.sin(i / 3) * 7));
+    const stubbleShare = Math.round(Math.max(0, Math.min(55, (baseAqi > 250 ? 30 : 8) + (inv > 0 ? 8 : -4) + Math.sin(i / 4) * 6)));
+
+    aqiData.push(projectedAqi);
+    pm25Data.push(projectedPm25);
+    pm10Data.push(projectedPm10);
+    stubbleData.push(stubbleShare);
+  }
+
+  return { labels, aqi: aqiData, pm25: pm25Data, pm10: pm10Data, stubble: stubbleData };
+}
+
 export function generate24HourTrend(baseAqi) {
   const hours = [];
   const aqiData = [];
@@ -1055,3 +1097,4 @@ export function generate7DayForecast(baseAqi) {
 
   return { labels, avg: avgAqi, min: minAqi, max: maxAqi };
 }
+

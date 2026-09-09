@@ -512,12 +512,19 @@ html.light.weather-night .cloud-mass {
   width: 42px;
   height: 42px;
   border-radius: 12px;
-  background: linear-gradient(135deg, #3B82F6 0%, #06B6D4 100%);
+  background: linear-gradient(135deg, #2563EB 0%, #0284C7 50%, #0D9488 100%);
   display: flex;
   align-items: center;
   justify-content: center;
   color: #FFFFFF;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.brand-icon-wrap:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 18px rgba(37, 99, 235, 0.5);
 }
 
 .brand-title {
@@ -1086,6 +1093,36 @@ html.light .glass-card:hover {
 @keyframes flameFlicker {
   0% { transform: scale(0.95) rotate(-2deg); }
   100% { transform: scale(1.1) rotate(2deg); }
+}
+
+/* Realistic Atmospheric Smoke Plume Layer */
+.realistic-smoke-outer path {
+  filter: blur(14px);
+  mix-blend-mode: multiply;
+  transition: all 0.6s ease;
+  animation: smokeHazePulse 4s infinite alternate ease-in-out;
+}
+
+.realistic-smoke-core path {
+  filter: blur(8px);
+  mix-blend-mode: multiply;
+  transition: all 0.6s ease;
+  animation: smokeCoreDrift 3s infinite alternate ease-in-out;
+}
+
+html.dark .realistic-smoke-outer path,
+html.dark .realistic-smoke-core path {
+  mix-blend-mode: screen;
+}
+
+@keyframes smokeHazePulse {
+  0% { opacity: 0.65; transform: scale(0.98); }
+  100% { opacity: 0.95; transform: scale(1.02); }
+}
+
+@keyframes smokeCoreDrift {
+  0% { opacity: 0.7; }
+  100% { opacity: 1; }
 }
 
 /* Map Popup */
@@ -1880,3 +1917,134 @@ html.light .glass-card:hover {
   font-size: 0.75rem;
   color: var(--text-secondary);
 }
+
+/* ==========================================================================
+   Atmospheric Inversion & Boundary Layer Mixing Panel (Coupled Physics)
+   ========================================================================== */
+.inversion-panel-card {
+  margin-top: 1.5rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.inversion-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.inversion-badge-tag {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #38BDF8;
+  background: rgba(56, 189, 248, 0.12);
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  margin-bottom: 0.35rem;
+}
+
+.inversion-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.85rem;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 9999px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #EF4444;
+  white-space: nowrap;
+}
+
+.inversion-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #EF4444;
+  display: inline-block;
+  box-shadow: 0 0 8px #EF4444;
+  animation: pulse-glow 2s infinite ease-in-out;
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.85); }
+}
+
+.inversion-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.inversion-metric-box {
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 1rem 1.15rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.inversion-metric-box:hover {
+  transform: translateY(-2px);
+  border-color: rgba(56, 189, 248, 0.4);
+}
+
+.inversion-metric-lbl {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+}
+
+.inversion-metric-val {
+  font-size: 1.45rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+}
+
+.inversion-metric-sub {
+  font-size: 0.73rem;
+  color: var(--text-secondary);
+}
+
+.inversion-dynamic-desc {
+  background: rgba(249, 115, 22, 0.08);
+  border-left: 4px solid #F97316;
+  padding: 0.85rem 1.15rem;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--text-primary);
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+}
+
+html.light .inversion-dynamic-desc {
+  background: rgba(249, 115, 22, 0.07);
+  color: #1E293B;
+}
+
+html.light .inversion-metric-box {
+  background: rgba(241, 245, 249, 0.7);
+  border: 1px solid rgba(203, 213, 225, 0.6);
+}
+

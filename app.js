@@ -1,8 +1,8 @@
-import { STATIONS, getAQIInfo, AQI_LEVELS } from './assets/js/stationData.js';
+import { STATIONS, getAQIInfo, AQI_LEVELS, STUBBLE_FIRE_HOTSPOTS } from './assets/js/stationData.js';
 import { AQIGauge } from './assets/js/aqiGauge.js';
 import { MapTracker } from './assets/js/mapTracker.js';
 import { ForecastCharts } from './assets/js/charts.js';
-import { fetchLiveWeather, mapWeatherToVisualState, getWeatherStateMetadata } from './assets/js/weatherService.js';
+import { fetchLiveWeather, mapWeatherToVisualState, getWeatherStateMetadata, fetchAtmosphericProfile, computeStubblePlumeForecast, fetchLiveStationTelemetry } from './assets/js/weatherService.js';
 
 class AirSenseApp {
   constructor() {
@@ -15,6 +15,7 @@ class AirSenseApp {
     this.gauge = null;
     this.map = null;
     this.charts = null;
+    this.currentAtmosphericProfile = null;
     
     // Alert configuration
     this.alertThreshold = parseInt(localStorage.getItem('airsense_alert_thresh') || '300', 10);
@@ -38,12 +39,19 @@ class AirSenseApp {
     // Initial fetch from live API endpoint (with graceful fallback)
     await this.fetchLiveTelemetry();
     
-    this.renderStationData(this.currentStationId);
+    await this.renderStationData(this.currentStationId);
     this.renderStationsTable();
     this.checkThresholdAlerts();
     
     // Initial weather-reactive update for Clean Light theme
     await this.updateWeatherReactiveTheme();
+
+    // Real-Time Live Auto-Polling Interval (Every 60 seconds)
+    setInterval(async () => {
+      if (!this.scrubberPlaying) {
+        await this.renderStationData(this.currentStationId);
+      }
+    }, 60000);
   }
 
   // ==========================================
@@ -86,7 +94,7 @@ class AirSenseApp {
     if (this.map) this.map.updateTileTheme(isDarkTheme);
     if (this.charts) {
       const station = this.stations.find(s => s.id === this.currentStationId);
-      if (station) this.charts.updateCharts(station);
+      if (station) this.charts.updateCharts(station, this.currentAtmosphericProfile);
     }
     if (this.gauge) this.gauge.draw();
 
@@ -321,7 +329,7 @@ class AirSenseApp {
       });
     }
 
-    // 24-Hour Timeline Scrubber & Simulation
+    // 72-Hour Atmospheric Forecast Scrubber & Simulation
     const timeSlider = document.getElementById('time-slider');
     const scrubberPlayBtn = document.getElementById('scrubber-play-btn');
     const scrubberResetBtn = document.getElementById('scrubber-reset-btn');
@@ -329,8 +337,8 @@ class AirSenseApp {
     if (timeSlider) {
       timeSlider.addEventListener('input', (e) => {
         this.stopScrubberPlayback();
-        const hour = parseInt(e.target.value, 10);
-        this.simulateDiurnalHour(hour);
+        const offsetHour = parseInt(e.target.value, 10);
+        this.simulate72HourOutlook(offsetHour);
       });
     }
 
@@ -343,10 +351,9 @@ class AirSenseApp {
     if (scrubberResetBtn) {
       scrubberResetBtn.addEventListener('click', () => {
         this.stopScrubberPlayback();
-        const nowHour = new Date().getHours();
-        if (timeSlider) timeSlider.value = nowHour;
-        this.simulateDiurnalHour(nowHour, true);
-        this.showToast('Live Mode', 'Reset scrubber to live telemetry', 'info');
+        if (timeSlider) timeSlider.value = 0;
+        this.simulate72HourOutlook(0, true);
+        this.showToast('Live Mode', 'Reset scrubber to live telemetry baseline', 'info');
       });
     }
   }
@@ -437,7 +444,8 @@ class AirSenseApp {
   }
 
   // ==========================================
-  // 24-Hour Diurnal Timeline Scrubber
+  // ==========================================
+  // 72-Hour Forecast Timeline Scrubber
   // ==========================================
   toggleScrubberPlayback() {
     const playBtn = document.getElementById('scrubber-play-btn');
@@ -450,10 +458,10 @@ class AirSenseApp {
       
       this.scrubberInterval = setInterval(() => {
         let current = parseInt(timeSlider.value, 10);
-        current = (current + 1) % 24;
+        current = (current + 1) % 73;
         timeSlider.value = current;
-        this.simulateDiurnalHour(current);
-      }, 1000);
+        this.simulate72HourOutlook(current);
+      }, 900);
     }
   }
 
@@ -464,33 +472,53 @@ class AirSenseApp {
       this.scrubberInterval = null;
     }
     const playBtn = document.getElementById('scrubber-play-btn');
-    if (playBtn) playBtn.innerHTML = '<span id="play-icon">▶</span> Play 24h Loop';
+    if (playBtn) playBtn.innerHTML = '<span id="play-icon">▶</span> Play 72h Loop';
   }
 
-  simulateDiurnalHour(hour, isLive = false) {
+  simulate72HourOutlook(offsetHours, isLive = false) {
     const label = document.getElementById('scrubber-time-label');
-    const formattedHour = `${hour.toString().padStart(2, '0')}:00`;
+    const now = new Date();
+    const targetTime = new Date(now.getTime() + offsetHours * 3600 * 1000);
+    const hour = targetTime.getHours();
+    const timeFormatted = `${targetTime.toLocaleDateString('en-IN', { weekday: 'short' })} ${hour.toString().padStart(2, '0')}:00`;
     
     if (label) {
-      label.textContent = isLive 
-        ? `Current: Live Telemetry (${formattedHour})`
-        : `Simulation: ${formattedHour} (Diurnal Inversion Model)`;
+      label.textContent = isLive || offsetHours === 0
+        ? `Live Baseline (+0h) • ${timeFormatted}`
+        : `Forecast: +${offsetHours}h Outlook (${timeFormatted})`;
     }
 
-    // Diurnal factor
-    let factor = 1.0;
-    if (hour >= 5 && hour <= 9) factor = 1.22;
-    else if (hour >= 20 && hour <= 23) factor = 1.18;
-    else if (hour >= 13 && hour <= 16) factor = 0.82;
+    if (isLive || offsetHours === 0) {
+      const station = this.stations.find(s => s.id === this.currentStationId);
+      if (station) this.renderStationData(station.id);
+      return;
+    }
+
+    // Diurnal & Atmospheric coupling factor across 72h
+    let diurnal = 1.0;
+    if (hour >= 6 && hour <= 9) diurnal = 1.25;
+    else if (hour >= 20 && hour <= 23) diurnal = 1.22;
+    else if (hour >= 13 && hour <= 16) diurnal = 0.82;
+
+    const inv = (this.currentAtmosphericProfile && this.currentAtmosphericProfile.inversionIndices && this.currentAtmosphericProfile.inversionIndices[offsetHours] !== undefined)
+      ? this.currentAtmosphericProfile.inversionIndices[offsetHours]
+      : ((hour >= 20 || hour <= 8) ? 1.4 : -2.5);
+
+    const invImpact = inv > 0 ? (inv * 10) : (inv * 4);
 
     const station = this.stations.find(s => s.id === this.currentStationId);
     if (station) {
-      const simulatedAqi = Math.round(station.aqi * factor);
+      const simulatedAqi = Math.round(Math.max(25, Math.min(495, (station.aqi * diurnal * 0.92) + invImpact + Math.sin(offsetHours / 3) * 6)));
+      const simulatedPm25 = Math.round(Math.max(15, (station.pm25 * diurnal * 0.92) + (invImpact * 0.8) + Math.sin(offsetHours / 3) * 5));
+      const simulatedPm10 = Math.round(Math.max(25, (station.pm10 * diurnal * 0.92) + (invImpact * 1.1) + Math.sin(offsetHours / 3) * 7));
+      const simulatedStubble = Math.round(Math.max(0, Math.min(55, (station.aqi > 250 ? 30 : 8) + (inv > 0 ? 8 : -4) + Math.sin(offsetHours / 4) * 6)));
+
       const simulatedStation = {
         ...station,
         aqi: simulatedAqi,
-        pm25: Math.round(station.pm25 * factor),
-        pm10: Math.round(station.pm10 * factor)
+        pm25: simulatedPm25,
+        pm10: simulatedPm10,
+        stubbleShare: simulatedStubble
       };
       this.renderStationData(station.id, simulatedStation);
     }
@@ -605,6 +633,17 @@ class AirSenseApp {
   }
 
   // ==========================================
+  // Real-Time On-Demand Sync
+  // ==========================================
+  async refreshLiveData() {
+    this.showToast('Connecting Live Feed', 'Querying live Open-Meteo sensors and atmospheric soundings...', 'info');
+    await this.fetchLiveTelemetry();
+    await this.renderStationData(this.currentStationId, null, true);
+    this.renderStationsTable();
+    this.showToast('Telemetry Synced', `Live telemetry updated for ${this.stations.find(s => s.id === this.currentStationId)?.name || 'Delhi NCR'}`, 'success');
+  }
+
+  // ==========================================
   // Station Selection & Telemetry Rendering
   // ==========================================
   async selectStation(stationId) {
@@ -621,9 +660,37 @@ class AirSenseApp {
     await this.updateWeatherReactiveTheme();
   }
 
-  renderStationData(stationId, overrideData = null) {
-    const station = overrideData || this.stations.find(s => s.id === stationId);
+  async renderStationData(stationId, overrideData = null, bypassCache = false) {
+    let station = overrideData || this.stations.find(s => s.id === stationId);
     if (!station) return;
+
+    // Fetch Live Real-Time Telemetry from Open-Meteo Sensors (when not simulating)
+    let isLiveStream = false;
+    if (!overrideData) {
+      const liveData = await fetchLiveStationTelemetry(station.lat, station.lng, bypassCache);
+      if (liveData) {
+        isLiveStream = true;
+        if (liveData.aq) {
+          station.aqi = liveData.aq.aqi;
+          station.pm25 = liveData.aq.pm25;
+          station.pm10 = liveData.aq.pm10;
+          station.no2 = liveData.aq.no2;
+          station.so2 = liveData.aq.so2;
+          station.co = liveData.aq.co;
+          station.o3 = liveData.aq.o3;
+        }
+        if (liveData.weather) {
+          station.temp = liveData.weather.temp;
+          station.humidity = liveData.weather.humidity;
+          station.visibility = liveData.weather.visibility;
+          station.wind = {
+            speed: liveData.weather.windSpeed,
+            direction: liveData.weather.windDirection,
+            deg: liveData.weather.windDeg
+          };
+        }
+      }
+    }
 
     const info = getAQIInfo(station.aqi);
 
@@ -632,11 +699,15 @@ class AirSenseApp {
     if (nameEl) nameEl.textContent = `${station.flag || '📍'} ${station.name}`;
 
     const distBadge = document.getElementById('station-distance-badge');
-    if (distBadge) distBadge.textContent = `${station.region} • ${station.city || 'Telemetry'}`;
+    if (distBadge) {
+      distBadge.textContent = isLiveStream ? '● LIVE SENSOR STREAM' : `${station.region} • Telemetry`;
+      distBadge.style.color = isLiveStream ? '#10B981' : '';
+    }
 
     const updateTimeEl = document.getElementById('last-updated-time');
     if (updateTimeEl) {
-      updateTimeEl.textContent = `Updated: ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+      const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      updateTimeEl.textContent = `Updated: ${timeStr} ${isLiveStream ? '(Real-Time)' : ''}`;
     }
 
     // Gauge Update
@@ -681,22 +752,96 @@ class AirSenseApp {
     document.getElementById('weather-humidity').textContent = `${station.humidity}%`;
     document.getElementById('weather-visibility').textContent = `${station.visibility} km`;
 
-    // Stubble Alert Banner
-    const stubbleValEl = document.getElementById('stubble-pct-val');
-    if (stubbleValEl) stubbleValEl.textContent = `${station.stubbleShare}%`;
+    // Coupled Atmospheric Physics & Inversion Profile
+    const profileData = await fetchAtmosphericProfile(station.lat, station.lng);
+    this.currentAtmosphericProfile = profileData;
+    const plumeForecast = computeStubblePlumeForecast(STUBBLE_FIRE_HOTSPOTS, station.wind.speed, station.wind.deg || 315);
 
+    // Stubble Alert Banner & Trajectory Forecast
     const stubbleAlertEl = document.getElementById('stubble-alert-text');
     if (stubbleAlertEl) {
-      if (station.region === 'Delhi NCR') {
-        stubbleAlertEl.textContent = `Prevailing North-Westerly winds (${station.wind.direction} @ ${station.wind.speed} km/h) are actively transporting agricultural biomass smoke plume into Delhi NCR basin.`;
+      stubbleAlertEl.textContent = plumeForecast.summaryText;
+    }
+
+    const stubbleEtaVal = document.getElementById('stubble-eta-val');
+    if (stubbleEtaVal) stubbleEtaVal.textContent = plumeForecast.etaText;
+
+    const stubbleEtaLbl = document.getElementById('stubble-eta-lbl');
+    if (stubbleEtaLbl) stubbleEtaLbl.textContent = plumeForecast.etaLabel;
+
+    const plumeBadge = document.getElementById('plume-trajectory-badge');
+    if (plumeBadge) {
+      if (plumeForecast.isCarryingTowardDelhi) {
+        plumeBadge.style.background = 'rgba(239, 68, 68, 0.15)';
+        plumeBadge.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+        plumeBadge.style.color = '#EF4444';
+        plumeBadge.innerHTML = '<span class="pulse-dot" style="background-color: #EF4444;"></span> DOWNWIND TRAJECTORY ACTIVE';
       } else {
-        stubbleAlertEl.textContent = `Live atmospheric telemetry for ${station.name}. Biomass smoke fraction currently measured at ${station.stubbleShare}%.`;
+        plumeBadge.style.background = 'rgba(16, 185, 129, 0.15)';
+        plumeBadge.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+        plumeBadge.style.color = '#10B981';
+        plumeBadge.innerHTML = '<span class="pulse-dot" style="background-color: #10B981;"></span> DIVERGENT / OFF-AXIS';
+      }
+    }
+
+    // Atmospheric Inversion Panel DOM Updates
+    if (profileData && profileData.current) {
+      const cur = profileData.current;
+      const invDeltaEl = document.getElementById('inversion-delta-val');
+      if (invDeltaEl) {
+        invDeltaEl.textContent = cur.inversionIndex > 0 ? `+${cur.inversionIndex} °C` : `${cur.inversionIndex} °C`;
+        invDeltaEl.style.color = cur.statusColor;
+      }
+
+      const invPblEl = document.getElementById('inversion-pbl-val');
+      if (invPblEl) {
+        invPblEl.textContent = `${cur.pblHeight} m`;
+      }
+
+      const invPblSub = document.getElementById('inversion-pbl-sub');
+      if (invPblSub) {
+        if (cur.pblHeight < 500) {
+          invPblSub.style.color = '#EF4444';
+          invPblSub.textContent = '⚠️ Below 500m Critical Trapping Height';
+        } else {
+          invPblSub.style.color = '#10B981';
+          invPblSub.textContent = '✓ Adequate Vertical Dispersion Layer';
+        }
+      }
+
+      const invVentEl = document.getElementById('inversion-vent-val');
+      if (invVentEl) {
+        invVentEl.textContent = `${cur.ventilationIndex.toLocaleString()} m²/s`;
+      }
+
+      const invStatusLbl = document.getElementById('inversion-status-label');
+      if (invStatusLbl) {
+        invStatusLbl.textContent = cur.strength;
+      }
+
+      const invStatusDot = document.getElementById('inversion-status-dot');
+      if (invStatusDot) {
+        invStatusDot.style.backgroundColor = cur.statusColor;
+        invStatusDot.style.boxShadow = `0 0 8px ${cur.statusColor}`;
+      }
+
+      const invStatusPill = document.getElementById('inversion-status-pill');
+      if (invStatusPill) {
+        invStatusPill.style.color = cur.statusColor;
+        invStatusPill.style.borderColor = cur.statusColor;
+        invStatusPill.style.background = `${cur.statusColor}22`;
+      }
+
+      const invDesc = document.getElementById('inversion-dynamic-desc');
+      if (invDesc) {
+        invDesc.textContent = cur.explanation;
+        invDesc.style.borderLeftColor = cur.statusColor;
       }
     }
 
     // Charts
     if (this.charts) {
-      this.charts.updateCharts(station);
+      this.charts.updateCharts(station, profileData);
     }
   }
 
